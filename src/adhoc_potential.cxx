@@ -34,6 +34,9 @@ void AdhocPotential::transform(Options& state){
     
   } else {
     phi = 3.0 * Te;
+    phi.applyBoundary("neumann");
+    mesh->communicate(phi);
+    phi.applyParallelBoundary(parallel_neumann_o2);   
   }
 
   set(fields["phi"], phi);
