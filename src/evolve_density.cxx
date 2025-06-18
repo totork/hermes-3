@@ -188,7 +188,7 @@ void EvolveDensity::transform(Options& state) {
   }
 
   auto& species = state["species"][name];
-  set(species["density"], floor(N, 0.0)); // Density in state always >= 0
+  set(species["density"], floor(N, density_floor)); // Density in state always >= 0
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
     set(species["charge"], charge);
