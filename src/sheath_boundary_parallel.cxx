@@ -56,6 +56,11 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
     throw BoutException("Range of sin_alpha must be between 0 and 1");
   }
 
+  neumann_boundaries = options["neumann_boundaries"]
+           .doc("Use zero gradients into the sheath instead of extrapolating")
+           .withDefault(false);
+  
+  
   always_set_phi =
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
@@ -238,10 +243,16 @@ void SheathBoundaryParallel::transform(Options &state) {
       // Limited so that the values don't increase into the sheath
       // This ensures that the guard cell values remain positive
       // exp( 2*log(N[i]) - log(N[ip]) )
-      pnt.limitFree(Ne);
-      pnt.limitFree(Te);
-      pnt.limitFree(Pe);
-
+      if (neumann_boundaries){
+	pnt.ynext(Ne) = pnt.ythis(Ne);
+	pnt.ynext(Te) = pnt.ythis(Te);
+	pnt.ynext(Pe) = pnt.ythis(Pe);
+      } else {
+	pnt.limitFree(Ne);
+	pnt.limitFree(Te);
+	pnt.limitFree(Pe);
+      }
+	
       // Free boundary potential linearly extrapolated
       const BoutReal phiGradient = pnt.extrapolate_grad_o2(phi);
       pnt.neumann_o1(phi, phiGradient);
@@ -371,9 +382,15 @@ void SheathBoundaryParallel::transform(Options &state) {
         // This ensures that the guard cell values remain positive
         // exp( 2*log(N[i]) - log(N[ip]) )
 
-        pnt.limitFree(Ni);
-        pnt.limitFree(Ti);
-        pnt.limitFree(Pi);
+	if (neumann_boundaries){
+	  pnt.ynext(Ni) = pnt.ythis(Ni);
+	  pnt.ynext(Ti) = pnt.ythis(Ti);
+	  pnt.ynext(Pi) = pnt.ythis(Pi);
+	} else {
+	  pnt.limitFree(Ni);
+	  pnt.limitFree(Ti);
+	  pnt.limitFree(Pi);
+	}	        
 
         // Calculate sheath values at half-way points (cell edge)
         const BoutReal nesheath = pnt.interpolate_sheath_o1(Ne);

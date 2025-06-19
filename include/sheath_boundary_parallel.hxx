@@ -31,6 +31,7 @@ struct SheathBoundaryParallel : public Component {
   ///   - secondary_electron_coef  Effective secondary electron emission coefficient
   ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
   ///   - always_set_phi           Always set phi field? Default is to only modify if already set
+  ///   - neumann_boundaries       Instead of extrapolating, do not assume any gradients into the sheath, mainly used for FCI
   SheathBoundaryParallel(std::string name, Options &options, Solver *);
 
   ///
@@ -80,7 +81,7 @@ struct SheathBoundaryParallel : public Component {
 private:
   BoutReal Ge; // Secondary electron emission coefficient
   BoutReal sin_alpha; // sin of angle between magnetic field and wall.
-
+  bool neumann_boundaries;
   bool always_set_phi; ///< Set phi field?
 
   bool always_zero_current; ///< Set phi boundary assuming zero current?
