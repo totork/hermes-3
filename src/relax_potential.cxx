@@ -44,6 +44,15 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   mesh->communicate(viscosity);
   viscosity.applyParallelBoundary("parallel_dirichlet_o2");
 
+  viscosity_par = options["viscosity_par"]
+    .doc("Kinematic viscosity [m^2/s]")
+    .withDefault<Field3D>(0.0)
+    / (Lnorm * Lnorm * Omega_ci);
+
+  viscosity_par.applyBoundary("neumann");
+  mesh->communicate(viscosity_par);
+  viscosity_par.applyParallelBoundary("parallel_neumann_o2");
+  
   phi_dissipation = options["phi_dissipation"]
                         .doc("Parallel dissipation of potential [Recommended]")
                         .withDefault<bool>(true);
@@ -129,7 +138,7 @@ void RelaxPotential::transform(Options& state) {
 
   if (phi.isFci()){
     phi.applyParallelBoundary("parallel_neumann_o2");
-    Vort.applyParallelBoundary("parallel_neumann_o2");
+    Vort.applyParallelBoundary("parallel_neumann_o2");                 // Apply parallel BC because of parallel viscosity 
   }
   auto& fields = state["fields"];
 
@@ -262,6 +271,9 @@ void RelaxPotential::finally(const Options& state) {
   // Viscosity
   ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
 
+  Field3D dummy;
+  ddt(Vort) += Div_par_K_Grad_par_mod(viscosity_par, Vort, dummy, false);
+  
   // Solve diffusion equation for potential
 
   if (boussinesq) {
