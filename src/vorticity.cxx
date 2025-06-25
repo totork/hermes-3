@@ -51,6 +51,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   diamagnetic =
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
 
+  diamagnetic_bracketform = options["diamagnetic_bracketform"]
+                        .doc("Include diamagnetic current?")
+                        .withDefault<bool>(false);
+  
   sheath_boundary = options["sheath_boundary"]
                         .doc("Set potential to j=0 sheath at radial boundaries? (default = 0)")
                         .withDefault<bool>(false);
@@ -214,6 +218,12 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   } else {
     bracket_factor = 1.0;
   }
+
+  logB = log(coord->Bxy);
+  logB.applyBoundary("neumann_o2");
+  mesh->communicate(logB);
+  logB.applyParallelBoundary("parallel_neumann_o2");
+
 }
 
 void Vorticity::transform(Options& state) {
@@ -509,80 +519,103 @@ void Vorticity::transform(Options& state) {
   if (diamagnetic) {
     // Diamagnetic current. This is calculated here so that the energy sources/sinks
     // can be calculated for the evolving species.
+    if (!diamagnetic_bracketform){
+      Vector3D Jdia;
+      Jdia.x = 0.0;
+      Jdia.y = 0.0;
+      Jdia.z = 0.0;
+      Jdia.covariant = Curlb_B.covariant;
 
-    Vector3D Jdia;
-    Jdia.x = 0.0;
-    Jdia.y = 0.0;
-    Jdia.z = 0.0;
-    Jdia.covariant = Curlb_B.covariant;
+      Options& allspecies = state["species"];
+      
+      for (auto& kv : allspecies.getChildren()) {
+	Options& species = allspecies[kv.first]; // Note: need non-const
+	
+	if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
+	  continue; // No pressure or charge -> no diamagnetic current
+	}
+	if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+	  // No charge
+	  continue;
+	}
 
-    Options& allspecies = state["species"];
+	// Note that the species must have a charge, but charge is not used,
+	// because it cancels out in the expression for current
+	
+	auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+	
+	// Note: We need boundary conditions on P, so apply the same
+	//       free boundary condition as sheath_boundary.
+	auto P_fa_tmp = P.isFci() ? P : toFieldAligned(P);
+	auto& P_fa = P.isFci() ? P : P_fa_tmp;
+	
+	if (P.isFci() && !P.hasParallelSlices()) {
+	  P.calcParallelSlices();
+	}
+	yboundary.iter([&](auto& region) {
+	  for (auto& pnt : region) {
+	    // const auto& i = pnt.ind();
+	    pnt.limitFree(P_fa);
+	    // P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) -
+	    // P_ydown(r.ind, mesh->yend - 1, jz);
+	  }
+	});
+	if (!P.isFci()) {
+	  P = fromFieldAligned(P_fa);
+	}
 
-    for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+	// Note: This calculation requires phi derivatives at the Y boundaries
+	//       Setting to free boundaries
+	auto phi_fa_tmp = phi.isFci() ? phi : toFieldAligned(phi);
+	auto& phi_fa = phi.isFci() ? phi : phi_fa_tmp;
+	yboundary.iter([&](auto& region) {
+	  for (auto& pnt : region) {
+	    const auto grad = pnt.extrapolate_grad_o2(phi_fa);
+	    pnt.neumann_o2(phi_fa, grad);
+	  }
+	});
+	if (!phi.isFci()) {
+	  phi = fromFieldAligned(phi_fa);
+	}
 
-      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
-        continue; // No pressure or charge -> no diamagnetic current
-      }
-      if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
-        // No charge
-        continue;
-      }
-
-      // Note that the species must have a charge, but charge is not used,
-      // because it cancels out in the expression for current
-
-      auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-
-      // Note: We need boundary conditions on P, so apply the same
-      //       free boundary condition as sheath_boundary.
-      auto P_fa_tmp = P.isFci() ? P : toFieldAligned(P);
-      auto& P_fa = P.isFci() ? P : P_fa_tmp;
-
-      if (P.isFci() && !P.hasParallelSlices()) {
-        P.calcParallelSlices();
-      }
-      yboundary.iter([&](auto& region) {
-        for (auto& pnt : region) {
-          // const auto& i = pnt.ind();
-          pnt.limitFree(P_fa);
-          // P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) -
-          // P_ydown(r.ind, mesh->yend - 1, jz);
-        }
-      });
-      if (!P.isFci()) {
-        P = fromFieldAligned(P_fa);
-      }
-
-      // Note: This calculation requires phi derivatives at the Y boundaries
-      //       Setting to free boundaries
-      auto phi_fa_tmp = phi.isFci() ? phi : toFieldAligned(phi);
-      auto& phi_fa = phi.isFci() ? phi : phi_fa_tmp;
-      yboundary.iter([&](auto& region) {
-        for (auto& pnt : region) {
-          const auto grad = pnt.extrapolate_grad_o2(phi_fa);
-          pnt.neumann_o2(phi_fa, grad);
-        }
-      });
-      if (!phi.isFci()) {
-        phi = fromFieldAligned(phi_fa);
-      }
-
-      Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
-
-      // This term energetically balances diamagnetic term
+	Vector3D Jdia_species = P * Curlb_B; // Diamagnetic current for this species
+	
+	// This term energetically balances diamagnetic term
       // in the vorticity equation
-      subtract(species["energy_source"], Jdia_species * Grad(phi));
+	subtract(species["energy_source"], Jdia_species * Grad(phi));
+	
+	Jdia += Jdia_species; // Collect total diamagnetic current
+      }
 
-      Jdia += Jdia_species; // Collect total diamagnetic current
+      // Note: This term is central differencing so that it balances
+      // the corresponding compression term in the species pressure equations
+      DivJdia = Div(Jdia);
+      ddt(Vort) += DivJdia;
+
+      set(fields["DivJdia"], DivJdia);
+      
+    } else { // Diamagnetic current calculation for the fci version of the diamagnetic drift
+      Options& allspecies = state["species"];
+
+      for (auto& kv : allspecies.getChildren()) {
+        Options& species = allspecies[kv.first]; // Note: need non-const                                                                              
+
+        if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
+          continue; // No pressure or charge -> no diamagnetic current                                                                                
+        }
+        if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+          // No charge                                                                                                                                
+          continue;
+        }
+
+        auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+	Field3D DivJdia_species = 2.0 * bracket(logB, P, BRACKET_ARAKAWA) * bracket_factor;
+	ddt(Vort) += DivJdia_species;
+	// Balance of this term in the species energy equation
+	add(species["energy_source"], P * DivJdia_species);
+	
+      }
     }
-
-    // Note: This term is central differencing so that it balances
-    // the corresponding compression term in the species pressure equations
-    DivJdia = Div(Jdia);
-    ddt(Vort) += DivJdia;
-
-    set(fields["DivJdia"], DivJdia);
   }
 
   if (collisional_friction) {

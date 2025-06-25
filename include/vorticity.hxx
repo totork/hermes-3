@@ -55,7 +55,9 @@ struct Vorticity : public Component {
   ///     Parallel dissipation of vorticity?
   ///   - damp_core_vorticity: bool, default false
   ///     Damp axisymmetric component of vorticity in cell next to core boundary
-  ///
+  ///   - diamagnetic_bracketform: bool, default false
+  ///     Use the form of the diamagnetic current that uses the bracket operator (only usefull for fci calculations)
+  
   Vorticity(std::string name, Options &options, Solver *solver);
 
   /// Optional inputs
@@ -124,7 +126,7 @@ private:
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
 
   bool sheath_boundary; ///< Set outer boundary to j=0?
-
+  Field3D logB;
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
@@ -143,6 +145,7 @@ private:
   BoutReal hyper_z; ///< Hyper-viscosity in Z
   Field3D viscosity; ///< Kinematic viscosity
 
+  bool diamagnetic_bracketform;
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
