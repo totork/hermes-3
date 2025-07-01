@@ -595,6 +595,7 @@ void Vorticity::transform(Options& state) {
       set(fields["DivJdia"], DivJdia);
       
     } else { // Diamagnetic current calculation for the fci version of the diamagnetic drift
+      auto coord = mesh->getCoordinates();
       Options& allspecies = state["species"];
 
       for (auto& kv : allspecies.getChildren()) {
@@ -607,13 +608,15 @@ void Vorticity::transform(Options& state) {
           // No charge                                                                                                                                
           continue;
         }
-
+	
         auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 	Field3D DivJdia_species = 2.0 * bracket(logB, P, BRACKET_ARAKAWA) * bracket_factor;
 	ddt(Vort) += DivJdia_species;
 	// Balance of this term in the species energy equation
-	add(species["energy_source"], P * DivJdia_species);
-	
+	if (diamagnetic_polarisation){
+	  add(species["energy_source"], P * DivJdia_species);
+	}
+	subtract(species["energy_source"], P * 2.0 * bracket(logB, phi) * bracket_factor);
       }
     }
   }
