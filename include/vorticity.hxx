@@ -124,7 +124,7 @@ private:
   bool bndry_flux;  ///< Allow flows through radial boundaries?
 
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
-
+  int phi_inner_flag, phi_outer_flag;
   bool sheath_boundary; ///< Set outer boundary to j=0?
   Field3D logB;
   bool vort_dissipation; ///< Parallel dissipation of vorticity

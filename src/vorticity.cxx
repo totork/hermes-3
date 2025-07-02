@@ -139,7 +139,15 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   phiSolver = Laplacian::create(&options["laplacian"]);
   // Set coefficients for Boussinesq solve
   phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy));
+  
+  phi_inner_flag = options["laplacian"]["inner_boundary_flags"]
+    .doc("Which flag for inner laplace inversion boundary condition")
+    .withDefault(0);
 
+  phi_outer_flag = options["laplacian"]["outer_boundary_flags"]
+    .doc("Which flag for outer laplace inversion boundary condition")
+    .withDefault(0);
+  
   if (phi_boundary_relax) {
     // Set the last update time to -1, so it will reset
     // the first time RHS function is called
@@ -376,7 +384,7 @@ void Vorticity::transform(Options& state) {
     }
 
     // Sheath multiplier Te -> phi (2.84522 for Deuterium if Ti = 0)
-    if (mesh->firstX()) {
+    if ( (mesh->firstX()) && (phi_inner_flag==16)) {
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
         BoutReal teavg = 0.0; // Average Te in Z
         for (int k = 0; k < mesh->LocalNz; k++) {
@@ -396,7 +404,7 @@ void Vorticity::transform(Options& state) {
       }
     }
 
-    if (mesh->lastX()) {
+    if ( (mesh->lastX()) && (phi_outer_flag==16)) {
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
         BoutReal teavg = 0.0; // Average Te in Z
         for (int k = 0; k < mesh->LocalNz; k++) {
@@ -427,7 +435,7 @@ void Vorticity::transform(Options& state) {
 
   Field3D phi_plus_pi = phi + Pi_hat;
 
-  if (mesh->firstX()) {
+  if ( (mesh->firstX()) && (phi_inner_flag==16) ) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Average phi + Pi at the boundary, and set the boundary cell
@@ -439,7 +447,7 @@ void Vorticity::transform(Options& state) {
     }
   }
 
-  if (mesh->lastX()) {
+  if ( (mesh->lastX()) && (phi_outer_flag==16) ) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
         phi_plus_pi(mesh->xend + 1, j, k) =
