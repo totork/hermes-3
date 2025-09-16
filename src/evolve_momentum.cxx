@@ -69,16 +69,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   // Set to zero so set for output
   momentum_source = 0.0;
 
-  if (mesh->isFci()) {
-    const auto coord = mesh->getCoordinates();
-    // Note: This is 1 for a Clebsch coordinate system
-    //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices())
-      / (coord->J.withoutParallelSlices() * coord->Bxy);
-  } else {
-    // Clebsch coordinate system
-    bracket_factor = 1.0;
-  }
+  const auto coord = mesh->getCoordinates();
+  bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -96,14 +88,14 @@ void EvolveMomentum::transform(Options &state) {
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
-  Field3D Nlim = floor(N, density_floor);
+  Field3D Nlim = N;
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   NV.applyBoundary();
   V = NV / (AA * Nlim);
   V.name = Vname;
   mesh->communicate(V);
-  V.applyParallelBoundary();
+  V.applyParallelBoundary("parallel_neumann_o1");
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
@@ -132,7 +124,7 @@ void EvolveMomentum::finally(const Options &state) {
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  Field3D Nlim = floor(N, density_floor);
+  Field3D Nlim = N;
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;

@@ -29,6 +29,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
+  com_T = options["com_T"].withDefault(false);
+  
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
@@ -187,15 +189,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
     .withDefault(-1.0);
 
-  if (mesh->isFci()) {
-    const auto coord = mesh->getCoordinates();
-    // Note: This is 1 for a Clebsch coordinate system
-    //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
-  } else {
-    // Clebsch coordinate system
-    bracket_factor = 1.0;
-  }
+  const auto coord = mesh->getCoordinates();
+  bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -206,41 +201,9 @@ void EvolvePressure::transform(Options& state) {
     P = exp(logP);
   }
 
+  P.applyBoundary();
   mesh->communicate(P);
-
-  if (neumann_boundary_average_z) {
-    // Take Z (usually toroidal) average and apply as X (radial) boundary condition
-    if (mesh->firstX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal Pavg = 0.0; // Average P in Z
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          Pavg += P(mesh->xstart, j, k);
-        }
-        Pavg /= mesh->LocalNz;
-
-        // Apply boundary condition
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          P(mesh->xstart - 1, j, k) = 2. * Pavg - P(mesh->xstart, j, k);
-          P(mesh->xstart - 2, j, k) = P(mesh->xstart - 1, j, k);
-        }
-      }
-    }
-
-    if (mesh->lastX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal Pavg = 0.0; // Average P in Z
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          Pavg += P(mesh->xend, j, k);
-        }
-        Pavg /= mesh->LocalNz;
-
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          P(mesh->xend + 1, j, k) = 2. * Pavg - P(mesh->xend, j, k);
-          P(mesh->xend + 2, j, k) = P(mesh->xend + 1, j, k);
-        }
-      }
-    }
-  }
+  
 
   auto& species = state["species"][name];
 
@@ -249,9 +212,19 @@ void EvolvePressure::transform(Options& state) {
   N = getNoBoundary<Field3D>(species["density"]);
 
   Field3D Pfloor = floor(P, 0.0);
-  T = Pfloor / floor(N, density_floor);
+  T = floor(Pfloor / N,temperature_floor);
+
+  T.applyBoundary("neumann");
+  mesh->communicate(T);
+  T.applyParallelBoundary("parallel_neumann_o1");
+  
+  
   Pfloor = N * T; // Ensure consistency
 
+  Pfloor.applyBoundary();
+  mesh->communicate(Pfloor);
+  Pfloor.applyParallelBoundary("parallel_neumann_o1");
+  
   set(species["pressure"], Pfloor);
   set(species["temperature"], T);
 }
@@ -262,14 +235,8 @@ void EvolvePressure::finally(const Options& state) {
   /// Get the section containing this species
   const auto& species = state["species"][name];
 
-  // Get updated pressure and temperature with boundary conditions
-  // Note: Retain pressures which fall below zero
-  if (!P.isFci()) {
-    P.clearParallelSlices();
-  }
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
-  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
-
+  
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
@@ -302,7 +269,7 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow);
 
       // Work done. This balances energetically a term in the momentum equation
-      ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
+      ddt(P) -= (2. / 3) * P * Div_par(V);
 
     } else {
       // Use V * Grad(P) form
@@ -372,7 +339,7 @@ void EvolvePressure::finally(const Options& state) {
     // kappa ~ n * v_th^2 * tau
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
-    kappa_par = kappa_coefficient * Pfloor * tau / AA;
+    kappa_par = kappa_coefficient * P * tau / AA;
 
     if (kappa_limit_alpha > 0.0) {
       /*
@@ -398,21 +365,22 @@ void EvolvePressure::finally(const Options& state) {
       mesh->communicate(kappa_par);
     }
 
-    if (kappa_par.isFci()) {
-      kappa_par.applyBoundary("neumann");
-      mesh->communicate(kappa_par);
-      kappa_par.applyParallelBoundary("parallel_dirichlet_o2");
-    }
 
+    kappa_par.applyBoundary("neumann");
+    mesh->communicate(kappa_par);
+    kappa_par.applyParallelBoundary("parallel_neumann_o1");
+
+    /*
     yboundary.iter([&](auto& region) {
       for (auto& pnt : region) {
 	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
       }
     });
+    */
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, true);
     if (    flow_ylow_conduction.isAllocated()) {
       if (flow_ylow.isAllocated()) {
 	flow_ylow += flow_ylow_conduction;
@@ -449,14 +417,8 @@ void EvolvePressure::finally(const Options& state) {
   //////////////////////
   // Other sources
 
-  if (source_time_dependent) {
-    // Evaluate the source_prefactor function at the current time in seconds and scale source with it
-    BoutReal time = get<BoutReal>(state["time"]);
-    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
-    final_source = source * source_prefactor;
-  } else {
-    final_source = source;
-  }
+  final_source = source;
+
 
   Sp = final_source;
   if (species.isSet("energy_source")) {
