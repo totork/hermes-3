@@ -82,6 +82,7 @@ private:
   bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
+  bool com_T;
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
 
