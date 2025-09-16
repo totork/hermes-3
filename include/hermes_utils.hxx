@@ -4,6 +4,7 @@
 
 #include "bout/bout_enum_class.hxx"
 
+
 inline BoutReal floor(BoutReal value, BoutReal min) {
   if (value < min)
     return min;
@@ -47,5 +48,7 @@ Ind3D indexAt(const T& f, int x, int y, int z) {
   int nz = f.getNz();
   return Ind3D{(x * ny + y) * nz + z, ny, nz};
 }
+
+
 
 #endif // HERMES_UTILS_H

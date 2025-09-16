@@ -121,7 +121,9 @@ private:
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
-
+  BoutReal low_temperature;
+  BoutReal low_temperature_timescale;
+  
   Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 

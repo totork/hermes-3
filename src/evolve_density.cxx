@@ -14,6 +14,7 @@
 
 using bout::globals::mesh;
 
+
 EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
   AUTO_TRACE();
@@ -53,6 +54,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
 
+  low_density = options["low_density"]
+                   .doc("Density will be supplied when it drops below this value. This is for individual cells")
+                   .withDefault<BoutReal>(-1.0);
+  
   if (evolve_log) {
     // Evolve logarithm of density
     solver->add(logN, std::string("logN") + name);
@@ -99,7 +104,12 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .withDefault(source)
     / source_normalisation;
 
+  low_density_timescale = options["low_density_timescale"]
+                                  .doc("This timescale controls the aggressiveness of the low source")
+                                  .withDefault<BoutReal>(1e-6);
+  low_density_timescale *= Omega_ci;
 
+  
   const auto coord = mesh->getCoordinates();
   bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
 }
@@ -135,7 +145,6 @@ void EvolveDensity::transform(Options& state) {
     low_n_coeff.applyBoundary("neumann");
     set(species["low_n_coeff"], low_n_coeff);
   }
-
 
   final_source = source;
 
@@ -214,6 +223,10 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
   }
 
+  if (low_density > 0.0){
+    ddt(N) += low_sourceterm(N, low_density, low_density_timescale);
+  }
+  
   // Collect the external source from above with all the sources from
   // elsewhere (collisions, reactions, etc) for diagnostics
   Sn = get<Field3D>(species["density_source"]);

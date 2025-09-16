@@ -15,6 +15,7 @@
 #include "../include/hermes_build_config.hxx"
 
 
+
 using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
@@ -46,7 +47,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
-
+  low_temperature = options["low_temperature"]
+                           .doc("Temperature upon we add a local source to keep the temperatures above this")
+                           .withDefault<BoutReal>(-1.0);
+  
   if (evolve_log) {
     // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
@@ -122,6 +126,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("Use a time-dependent source?")
     .withDefault<bool>(false);
 
+  low_temperature_timescale = options["low_temperature_timescale"].doc("Aggressiveness of the low temperature local source").withDefault<BoutReal>(1e-6);
+  low_temperature_timescale *= Omega_ci;
+  
   // If time dependent, parse the function with respect to time from the input file
   if (source_time_dependent) {
     auto str = p_options["source_prefactor"]
@@ -435,6 +442,10 @@ void EvolvePressure::finally(const Options& state) {
   // This is active when P < 0 or when N < density_floor
   ddt(P) += N * T - P;
 
+  if (low_temperature > 0.0) {
+    ddt(P) += low_sourceterm(T, low_temperature, low_temperature_timescale);
+  }
+  
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(P) *= get<Field3D>(state["scale_timederivs"]);

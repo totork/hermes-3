@@ -36,6 +36,18 @@
 
 using bout::globals::mesh;
 
+const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor){
+  Field3D diff = f - lowvalue;
+  Field3D result = 0.0;
+  BOUT_FOR(i, f.getRegion("RGN_NOY")){
+    if (diff[i] < 0.0){
+      result[i] = abs(diff[i])/scalefactor;
+    }
+  }
+  return result;
+}
+
+
 const Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux) {
   Field3D result;
   result = 0.0;
