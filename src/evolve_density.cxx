@@ -125,7 +125,7 @@ void EvolveDensity::transform(Options& state) {
   floor(N, density_floor);
   N.applyBoundary();
   mesh->communicate(N);
-  N.applyParallelBoundary("parallel_neumann_o1");
+  N.applyParallelBoundary();
 
   auto& species = state["species"][name];
   set(species["density"], N); // Density in state always >= 0

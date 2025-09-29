@@ -210,7 +210,7 @@ void EvolvePressure::transform(Options& state) {
 
   P.applyBoundary();
   mesh->communicate(P);
-  
+  T.applyParallelBoundary();
 
   auto& species = state["species"][name];
 
@@ -221,14 +221,13 @@ void EvolvePressure::transform(Options& state) {
   Field3D Pfloor = floor(P, 0.0);
   T = floor(Pfloor / N,temperature_floor);
 
-  T.applyBoundary("neumann");
+  
   mesh->communicate(T);
   T.applyParallelBoundary("parallel_neumann_o1");
   
   
   Pfloor = N * T; // Ensure consistency
 
-  Pfloor.applyBoundary();
   mesh->communicate(Pfloor);
   Pfloor.applyParallelBoundary("parallel_neumann_o1");
   
