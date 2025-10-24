@@ -7,4 +7,10 @@ The FCI input file is in the main folder, the comparison run for the Curl B oper
 
 In the following, we show the time evolution of the blobs with both operators.
 
+![Blobs for both operators at timestep 10, the third colums displays the difference](plots/10.png)
+
+![Blobs for both operators at timestep 20, the third colums displays the difference](plots/20.png)
+
+![Blobs for both operators at timestep 50, the third colums displays the difference](plots/50.png)
+
 ![Blobs for both operators at timestep 100, the third colums displays the difference](plots/100.png)
