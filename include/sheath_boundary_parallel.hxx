@@ -4,10 +4,6 @@
 
 #include "component.hxx"
 
-#include <bout/yboundary_regions.hxx>
-
-extern YBoundary yboundary;
-
 /// Boundary condition at the wall in Y
 ///
 /// This is a collective component, because it couples all charged species
@@ -94,21 +90,19 @@ private:
   bool sheath_extrapolate; ///< Extrapolate values into sheath?
   
   Field3D fromFieldAligned(const Field3D& f) {
-    if (f.isFci()) {
+    if (f.hasParallelSlices()) {
       return f;
     }
     return ::fromFieldAligned(f);
   }
   Field3D toFieldAligned(const Field3D& f) {
-    if (f.isFci()) {
+    if (f.hasParallelSlices()) {
       return f;
     }
     return ::toFieldAligned(f);
   }
   template <class F>
-  void iter_regions(const F& f) {
-    yboundary.iter_regions(f);
-  }
+ 
 };
 
 namespace {

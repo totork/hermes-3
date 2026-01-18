@@ -7,8 +7,6 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
-#include <bout/yboundary_regions.hxx>
-
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
 #include "../include/hermes_utils.hxx"
@@ -22,8 +20,6 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   AUTO_TRACE();
 
   auto& options = alloptions[name];
-
-  yboundary.init(options);
 
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
@@ -208,11 +204,11 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
     .withDefault(-1.0);
 
-  if (mesh->isFci()) {
+  if (P.hasParallelSlices()) {
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     // Clebsch coordinate system
     bracket_factor = 1.0;
@@ -289,7 +285,7 @@ void EvolvePressure::finally(const Options& state) {
 
   // Get updated pressure and temperature with boundary conditions
   // Note: Retain pressures which fall below zero
-  if (!P.isFci()) {
+  if (!P.hasParallelSlices()) {
     P.clearParallelSlices();
   }
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
@@ -353,7 +349,7 @@ void EvolvePressure::finally(const Options& state) {
       Field3D Nlim = floor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       // skip if only for diagnostic with FCI, as not yet implemented
-      if (numerical_viscous_heating || (!Nlim.isFci())) {
+      if (numerical_viscous_heating || (!Nlim.hasParallelSlices())) {
 	Sp_nvh = (2. / 3) * AA * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_kinetic, fix_momentum_boundary_flux);
 	flow_ylow_kinetic *= AA;
 	flow_ylow += flow_ylow_kinetic;
@@ -424,17 +420,12 @@ void EvolvePressure::finally(const Options& state) {
       mesh->communicate(kappa_par);
     }
 
-    if (kappa_par.isFci()) {
+    if (kappa_par.hasParallelSlices()) {
       kappa_par.applyBoundary("neumann");
       mesh->communicate(kappa_par);
       kappa_par.applyParallelBoundary("parallel_neumann_o1");
     }
 
-    yboundary.iter([&](auto& region) {
-      for (auto& pnt : region) {
-	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
-      }
-    });
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately

@@ -29,7 +29,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   ASSERT0(mesh->xstart > 0);
 
   auto& options = alloptions[name];
-  yboundary.init(options);
   
   // Evolving variables e.g name is "h" or "h+"
   solver->add(Nn, std::string("N") + name);
@@ -166,7 +165,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
 
-  if (Nn.isFci()) {
+  if (Nn.hasParallelSlices()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
   }
 }
@@ -185,7 +184,7 @@ void NeutralMixed::transform(Options& state) {
   NVn.applyParallelBoundary();
 
   
-  if (!Nn.isFci()) {
+  if (!Nn.hasParallelSlices()) {
     Nn.clearParallelSlices();
     Pn.clearParallelSlices();
     NVn.clearParallelSlices();
@@ -208,23 +207,16 @@ void NeutralMixed::transform(Options& state) {
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
   TRACE("Neutral boundary conditions");
-  yboundary.iter_pnts([&](auto& pnt) {
-    // Free boundary (constant gradient) density
-    pnt.dirichlet_o2(Nn, pnt.extrapolate_sheath_o2(Nn));
+  
+  Nn.applyParallelBoundary("parallel_neumann_o1");
+  Tn.applyParallelBoundary("parallel_neumann_o1");
+  Pn.applyParallelBoundary("parallel_neumann_o1");
+  Pnlim.applyParallelBoundary("parallel_neumann_o1");
 
-    // Zero gradient temperature, heat flux added later
-    pnt.neumann_o2(Tn,0.0);
-
-    // Zero-gradient pressure
-    pnt.neumann_o1(Pn,0.0);
-    pnt.neumann_o1(Pnlim,0.0);
-    
-    // No flow into wall
-    pnt.dirichlet_o2(Vn,0.0); 
-    pnt.dirichlet_o2(Vnlim,0.0);
-    pnt.dirichlet_o2(NVn,0.0);
-    
-  }); // end yboundary.iter_pnts()
+  Vn.applyParallelBoundary("parallel_neumann_o1");
+  Vnlim.applyParallelBoundary("parallel_neumann_o1");
+  NVn.applyParallelBoundary("parallel_neumann_o1");
+  
   
   // Set values in the state
   auto& localstate = state["species"][name];
@@ -290,7 +282,7 @@ void NeutralMixed::finally(const Options& state) {
   mesh->communicate(Dnn);
   Dnn.applyParallelBoundary("parallel_neumann_o1");
   
-  if (!Dnn.isFci()) {
+  if (!Dnn.hasParallelSlices()) {
     Dnn.clearParallelSlices();
   }
   
@@ -299,12 +291,11 @@ void NeutralMixed::finally(const Options& state) {
   DnnPn = Dnn * Pnlim;
   DnnNVn = Dnn * NVn;
   
-  yboundary.iter_pnts([&](auto& pnt) {
-    pnt.dirichlet_o2(Dnn, 0.0);
-    pnt.dirichlet_o2(DnnPn, 0.0);
-    pnt.dirichlet_o2(DnnNn, 0.0);
-    pnt.dirichlet_o2(DnnNVn, 0.0);
-  });
+  Dnn.applyParallelBoundary("parallel_neumann_o1");
+  DnnPn.applyParallelBoundary("parallel_neumann_o1");
+  DnnNn.applyParallelBoundary("parallel_neumann_o1");
+  DnnNVn.applyParallelBoundary("parallel_neumann_o1");
+
   
   // Sound speed appearing in Lax flux for advection terms
   sound_speed = 0;
@@ -332,7 +323,7 @@ void NeutralMixed::finally(const Options& state) {
 
   ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow);
 
-  if (!Nn.isFci()) {
+  if (!Nn.hasParallelSlices()) {
     
     ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
     
@@ -358,7 +349,7 @@ void NeutralMixed::finally(const Options& state) {
 
   ddt(Pn) -= (2. / 3) * Pn * Div_par(Vn);                                                // Compression
 
-  if (!Pn.isFci()) {                                                                     // Perpendicular advection
+  if (!Pn.hasParallelSlices()) {                                                                     // Perpendicular advection
     ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
   } else {
     bool upwind = false;
@@ -373,7 +364,7 @@ void NeutralMixed::finally(const Options& state) {
   if (neutral_conduction) {
     ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
     
-    if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
+    if (!Pn.hasParallelSlices()) {                                                                     // Perpendicular advection                                                                                             
       ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
     } else {
       bool upwind = false;
@@ -401,7 +392,7 @@ void NeutralMixed::finally(const Options& state) {
 
     ddt(NVn) -= Grad_par(Pn);                                 // Pressure gradient
       
-    if (!NVn.isFci()) {                                                                     // Perpendicular advection
+    if (!NVn.hasParallelSlices()) {                                                                     // Perpendicular advection
       ddt(NVn) += Div_a_Grad_perp_flows(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow);
     } else {
       bool upwind = false;
@@ -420,7 +411,7 @@ void NeutralMixed::finally(const Options& state) {
 
       Field3D viscosity_source = AA * Div_par_K_Grad_par_mod(eta_n , Vn , mf_visc_par_ylow , false); // Parallel viscosity
       
-      if (!NVn.isFci()) {                                                                     // Perpendicular advection                                                                                          
+      if (!NVn.hasParallelSlices()) {                                                                     // Perpendicular advection                                                                                          
 	viscosity_source += Div_a_Grad_perp_flows(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow);
       } else {
 	bool upwind = false;

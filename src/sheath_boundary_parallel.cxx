@@ -6,7 +6,6 @@
 #include "bout/mesh.hxx"
 
 #include "bout/parallel_boundary_region.hxx"
-#include "bout/boundary_iterator.hxx"
 
 using bout::globals::mesh;
 
@@ -74,7 +73,6 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
                    / Tnorm;
 
   // init parallel bc iterator
-  yboundary.init(options);
   // Note: wall potential at the last cell before the boundary is used,
   // not the value at the boundary half-way between cells. This is due
   // to how twist-shift boundary conditions and non-aligned inputs are

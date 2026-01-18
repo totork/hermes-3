@@ -9,10 +9,6 @@
 #include <bout/invert_laplace.hxx>
 
 #include "component.hxx"
-#include <bout/yboundary_regions.hxx>
-
-extern YBoundary yboundary;
-
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
 struct NeutralMixed : public Component {
@@ -83,7 +79,7 @@ private:
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
 
   Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
-    if (a.isFci()) {
+    if (b.hasParallelSlices()) {
       return (*dagp)(a, b, false);
     }
     return FV::Div_a_Grad_perp(a, b);

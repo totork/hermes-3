@@ -9,7 +9,6 @@
 #include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
 #include <bout/version.hxx>
-#include <bout/yboundary_regions.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"

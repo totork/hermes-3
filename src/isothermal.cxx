@@ -29,7 +29,7 @@ void Isothermal::transform(Options &state) {
   Options& species = state["species"][name];
 
   T_f3d = T;
-  if (T_f3d.isFci()) {
+  if (T_f3d.hasParallelSlices()) {
     T_f3d.applyBoundary("neumann_o2");
     mesh->communicate(T_f3d);
     T_f3d.applyParallelBoundary("parallel_neumann_o2");

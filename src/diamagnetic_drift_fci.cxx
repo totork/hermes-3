@@ -1,6 +1,5 @@
 #include <bout/fv_ops.hxx>
 #include <bout/vecops.hxx>
-#include <bout/yboundary_regions.hxx>
 #include "../include/diamagnetic_drift_fci.hxx"
 using bout::globals::mesh;
 
@@ -9,8 +8,6 @@ DiamagneticDriftFCI::DiamagneticDriftFCI(std::string name, Options& alloptions,
 
   // Get options for this component
   auto& options = alloptions[name];
-
-  yboundary.init(options);
 
   // Normalise
 

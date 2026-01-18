@@ -230,7 +230,7 @@ const Field3D hyperdiffusion(const BoutReal a, const Field3D& b) {
  */
 const Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flux,
                                     bool poloidal, bool positive) {
-  if (n.isFci() and poloidal) {
+  if (n.hasParallelSlices() and poloidal) {
     return -bracket(n, f, BRACKET_ARAKAWA);
   }
   Field3D result{0.0};
@@ -1305,7 +1305,7 @@ const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f) {
     yzresult.setDirectionY(YDirectionType::Aligned);
   }
 
-  if (f.isFci()) {
+  if (f.hasParallelSlices()) {
     throw BoutException("FCI is inherently incompatible with this FV method");
   } else {
     // No FCI metrics
@@ -1611,7 +1611,7 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
   Field3D yzresult(mesh);
   yzresult.allocate();
 
-  if (f.isFci()) {
+  if (f.hasParallelSlices()) {
     Field3D f_tmp = f;
     Field3D a_tmp = a;
 #if BOUT_USE_FCI_AUTOMAGIC
@@ -1733,7 +1733,7 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
     }
   }
   // Check if we need to transform back
-  if (f.isFci()) {
+  if (f.hasParallelSlices()) {
     result += yzresult;
   } else {
     result += fromFieldAligned(yzresult);

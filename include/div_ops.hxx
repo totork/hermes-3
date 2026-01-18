@@ -155,7 +155,7 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
   Coordinates* coord = f_in.getCoordinates();
   CellEdges cellboundary;
 
-  if (f_in.isFci()){
+  if (f_in.hasParallelSlices()){
     // FCI version, using yup/down fields
     ASSERT1(f_in.hasParallelSlices());
     ASSERT1(v_in.hasParallelSlices());
@@ -583,7 +583,7 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 
   Coordinates* coord = f_in.getCoordinates();
 
-  if (f_in.isFci()){
+  if (f_in.hasParallelSlices()){
     // Use mid-point (cell boundary) averages
     if (flow_ylow.isAllocated()) {
       flow_ylow = emptyFrom(flow_ylow);

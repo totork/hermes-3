@@ -3,7 +3,6 @@
 #define KMODEL_H
 
 #include <bout/vectormetric.hxx>
-#include <bout/yboundary_regions.hxx>
 
 #include "component.hxx"
 #include "div_ops.hxx"
