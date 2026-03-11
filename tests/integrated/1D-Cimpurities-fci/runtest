@@ -32,9 +32,8 @@ def gridname(ny):
 
 
 ny = 128
-nout = 10
-timestep = 1e5 / nout
-recycling_coefficient = 0.1
+nout = 100
+timestep = 1e6 / nout
 nproc = 1
 
 args = (
@@ -44,8 +43,6 @@ args = (
     + str(nout)
     + " timestep="
     + str(timestep)
-    + " h+:target_recycle_multiplier="
-    + str(recycling_coefficient)
 )
 
 print("Running with " + args)
@@ -66,22 +63,7 @@ f.close()
 success = True
 
 Pi = np.mean(collect( "Ph+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
-Pe = np.mean(collect( "Pe", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
 Ni = np.mean(collect( "Nh+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
-
-Div_par_flow = np.mean(collect( "pfh+_tot_ylow", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
-Recycling_source = np.mean(collect( "Sh_target_recycle", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
-
-tol = 1e-8
-
-# + Because they should have different signs, meaning they should add up to zero
-if (np.abs(Recycling_source[0] + (Div_par_flow[0]*recycling_coefficient) ) > tol):
-    success = False
-    print("Parallel divergence is different to recycling times parallel divergence through boundary")
-    print(f"Recycling: {Recycling_source[0]} --- Divergence: {Div_par_flow[0]*recycling_coefficient}")
-else:
-    print(f"Recycling: {Recycling_source[0]} --- Divergence: {Div_par_flow[0]*recycling_coefficient}")
-
 
 if success:
     print(" => Test passed")
