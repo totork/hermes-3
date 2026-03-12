@@ -32,8 +32,8 @@ def gridname(ny):
 
 
 ny = 128
-nout = 100
-timestep = 1e6 / nout
+nout = 5
+timestep = 1e4 / nout
 nproc = 1
 
 args = (

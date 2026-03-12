@@ -1,7 +1,10 @@
-nout = 50
-timestep = 0.1
+
+nout = 100
+timestep = 1e6 / nout
 
 [mesh]
+
+file = "../../../../grids/straight_slab_120m/MMS_straight_slab_8_128_4_True.fci.grid.nc"
 
 extrapolate_y = false 
 
@@ -20,7 +23,7 @@ type = cvode
 
 
 [hermes]
-components = h+, e, c, c+, c+2, collisions, sound_speed, sheath_boundary_parallel, reactions, ion_viscosity, recycling_fci
+components = h+, e, c, c+, c+2, c+3, c+4,c+5, c+6, collisions, sound_speed, sheath_boundary_parallel, reactions, ion_viscosity, recycling_fci
 
 
 Nnorm = 1e18
@@ -52,7 +55,7 @@ p_div_v = true
 dissipative = false
 
 recycle_as = c
-target_recycle_multiplier = 0.001
+target_recycle_multiplier = 0.01
 target_recycle = true
 
 anomalous_D_par = 1e4
@@ -117,7 +120,11 @@ bndry_par_all = parallel_neumann_o1
 [reactions]
 type = (
 	c + e -> c+ + 2e,
-	c+ + e -> c+2 + 2e
+	c+ + e -> c+2 + 2e,
+	c+2 + e -> c+3 + 2e,
+	c+3 + e -> c+4 + 2e,
+	c+4 + e -> c+5 + 2e,
+	c+5 + e -> c+6 + 2e	
        )
 
 
@@ -202,6 +209,112 @@ bndry_all = neumann
 bndry_par_all = parallel_neumann_o1
 [Pc+2]
 function = (10.0 / `hermes`:Tnorm) * `Nc+2`:function
+source = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+
+[c+3]  # Ions
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion_3d
+charge = 3.0
+AA = 6.0
+thermal_conduction = true  # in evolve_pressure
+p_div_v = true
+dissipative = false
+anomalous_D_par = 1e4
+n_lowsource = 1e15
+
+[Nc+3]
+function =  (1e16 / `hermes`:Nnorm)
+source = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+[NVc+3]
+function = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+[Pc+3]
+function = (10.0 / `hermes`:Tnorm) * `Nc+3`:function
+source = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+
+[c+4]  # Ions
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion_3d
+charge = 4.0
+AA = 6.0
+thermal_conduction = true  # in evolve_pressure
+p_div_v = true
+dissipative = false
+anomalous_D_par = 1e4
+n_lowsource = 1e15
+
+[Nc+4]
+function =  (1e16 / `hermes`:Nnorm)
+source = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+[NVc+4]
+function = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+[Pc+4]
+function = (10.0 / `hermes`:Tnorm) * `Nc+4`:function
+source = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+
+
+
+
+[c+5]  # Ions
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion_3d
+charge = 5.0
+AA = 6.0
+thermal_conduction = true  # in evolve_pressure
+p_div_v = true
+dissipative = false
+anomalous_D_par = 1e4
+n_lowsource = 1e15
+
+[Nc+5]
+function =  (1e16 / `hermes`:Nnorm)
+source = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+[NVc+5]
+function = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+[Pc+5]
+function = (10.0 / `hermes`:Tnorm) * `Nc+5`:function
+source = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+
+
+
+
+[c+6]  # Ions
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion_3d
+charge = 6.0
+AA = 6.0
+thermal_conduction = true  # in evolve_pressure
+p_div_v = true
+dissipative = false
+anomalous_D_par = 1e4
+n_lowsource = 1e15
+
+[Nc+6]
+function =  (1e16 / `hermes`:Nnorm)
+source = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+[NVc+6]
+function = 0.0
+bndry_all = neumann
+bndry_par_all = parallel_neumann_o1
+[Pc+6]
+function = (10.0 / `hermes`:Tnorm) * `Nc+6`:function
 source = 0.0
 bndry_all = neumann
 bndry_par_all = parallel_neumann_o1
