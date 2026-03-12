@@ -20,7 +20,7 @@ type = cvode
 
 
 [hermes]
-components = h+, e, c, c+, c+2, collisions, sound_speed, sheath_boundary_parallel, ion_viscosity, recycling_fci
+components = h+, e, c, c+, c+2, collisions, sound_speed, sheath_boundary_parallel, reactions, ion_viscosity, recycling_fci
 
 
 Nnorm = 1e18
@@ -114,11 +114,11 @@ bndry_par_all = parallel_neumann_o1
 
 ##################################################################################################################
 
-#[reactions]
-#type = (
-#	c + e -> c+ + 2e,
-#	c+ + e -> c+2 + 2e
-#       )
+[reactions]
+type = (
+	c + e -> c+ + 2e,
+	c+ + e -> c+2 + 2e
+       )
 
 
 
