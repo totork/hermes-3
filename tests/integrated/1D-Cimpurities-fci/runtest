@@ -31,9 +31,17 @@ def gridname(ny):
     return gridpath + f"MMS_straight_slab_8_{ny}_4_True.fci.grid.nc"
 
 
+# Copy the json files into the data folder
+import shutil
+
+src = "../../../json_database"
+dst = "json_database"
+
+shutil.copytree(src, dst, dirs_exist_ok=True)
+
 ny = 128
 nout = 5
-timestep = 1e4 / nout
+timestep = 1e3 / nout
 nproc = 1
 
 args = (
