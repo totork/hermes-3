@@ -97,7 +97,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
                         ? GET_NOBOUNDARY(Field3D, species["temperature"])
                         : 0.0;
   Field3D V =
-      species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
+    (species.isSet("velocity") && include_nu)? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
 
   Field3D flow_xlow, flow_zlow; // Flows through cell faces
 
