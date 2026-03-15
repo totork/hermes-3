@@ -273,6 +273,12 @@ void Vorticity::transform(Options& state) {
   mesh->communicate(Vort);
 
   Vort.applyParallelBoundary();
+
+  auto coord = mesh->getCoordinates();
+  phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy));
+  phiSolver->setCoefA(0.0);
+
+  
   
   // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
   // is constant in Z. This is for efficiency, to reduce the number of conversions.

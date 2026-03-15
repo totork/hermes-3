@@ -144,6 +144,7 @@ void Electromagnetic::transform(Options &state) {
 
   // Invert Helmholtz equation for Apar
   aparSolver->setCoefA((-beta_em) * alpha_em);
+  aparSolver->setCoefC(1.0);
   //aparSolver->setCoefA(0.0);
   if (const_gradient) {
     // Set gradient boundary condition from gradient inside boundary
