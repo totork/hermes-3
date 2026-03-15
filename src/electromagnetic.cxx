@@ -218,13 +218,6 @@ void Electromagnetic::transform(Options &state) {
     } else {
       v -= (Z / A) * N * Apar / floor(N, 1e-5);
     }  
-    // Need to update the guard cells
-    nv.applyBoundary("neumann");
-    v.applyBoundary("neumann");
-    bout::globals::mesh->communicate(nv, v);
-    v.applyParallelBoundary("parallel_neumann_o1");
-    nv.applyParallelBoundary("parallel_neumann_o1");
-	
     
     set(species["momentum"], nv);
     set(species["velocity"], v);
