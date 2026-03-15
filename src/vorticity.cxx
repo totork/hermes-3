@@ -784,7 +784,7 @@ void Vorticity::finally(const Options& state) {
     }
 
     Field3D flow_ylow = 0.0;
-    ddt(Vort) += (Z / A) * FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow,  false,
+    ddt(Vort) += Z * FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow,  false,
 						   false, true);
     
     if (state["fields"].isSet("Apar_flutter")) {
