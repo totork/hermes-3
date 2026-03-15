@@ -66,7 +66,7 @@ private:
   BoutReal beta_em; // Normalisation coefficient mu_0 e T n / B^2
 
   std::unique_ptr<Laplacian> aparSolver; // Laplacian solver in X-Z
-
+  bool use_normdensity;
   bool const_gradient; // Set neumann boundaries by extrapolation
   BoutReal apar_boundary_timescale; // Relaxation timescale
   BoutReal last_time;  // The last time the boundaries were updated

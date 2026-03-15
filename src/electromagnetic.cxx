@@ -38,6 +38,10 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
     .doc("Extrapolate gradient of Apar into all radial boundaries?")
     .withDefault<bool>(false);
 
+  use_normdensity = options["use_normdensity"]
+    .doc("Use the normalized density instead of the full density in the Apar equation?")
+    .withDefault<bool>(false);
+  
   // Give Apar an initial value because we solve Apar by iteration
   // starting from the previous solution
   // Note: On restart the value is restored (if available) in restartVars
@@ -127,15 +131,20 @@ void Electromagnetic::transform(Options &state) {
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Coefficient in front of A_||
-    alpha_em += floor(N, 1e-5) * (SQ(Z) / A);
 
+    if (use_normdensity) {
+      alpha_em += (SQ(Z) / A); 
+    } else {
+      alpha_em += floor(N, 1e-5) * (SQ(Z) / A);
+    }
+      
     // Right hand side
     Ajpar += mom * (Z / A);
   }
 
   // Invert Helmholtz equation for Apar
   aparSolver->setCoefA((-beta_em) * alpha_em);
-
+  //aparSolver->setCoefA(0.0);
   if (const_gradient) {
     // Set gradient boundary condition from gradient inside boundary
     Field3D rhs = (-beta_em) * Ajpar;
@@ -176,6 +185,9 @@ void Electromagnetic::transform(Options &state) {
     Apar = aparSolver->solve((-beta_em) * Ajpar, Apar);
   }
 
+  bout::globals::mesh->communicate(Apar);
+  Apar.applyParallelBoundary("parallel_neumann_o1");
+  
   // Save in the state
   set(state["fields"]["Apar"], Apar);
 
@@ -194,10 +206,18 @@ void Electromagnetic::transform(Options &state) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
     Field3D nv = getNonFinal<Field3D>(species["momentum"]);
-    nv -= Z * N * Apar;
+    if (use_normdensity) {
+      nv -= Z * Apar;
+    } else {
+      nv -= Z * N * Apar;
+    }
     // Note: velocity is momentum / (A * N)
     Field3D v = getNonFinal<Field3D>(species["velocity"]);
-    v -= (Z / A) * N * Apar / floor(N, 1e-5);
+    if (use_normdensity) {
+      v -= (Z / A) * Apar / floor(N, 1e-5);
+    } else {
+      v -= (Z / A) * N * Apar / floor(N, 1e-5);
+    }  
     // Need to update the guard cells
     nv.applyBoundary("neumann");
     v.applyBoundary("neumann");
