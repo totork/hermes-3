@@ -77,6 +77,11 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
 
+  zeroes = 0.0;
+  zeroes.applyBoundary("neumann");
+  bout::globals::mesh->communicate(zeroes);
+  zeroes.applyParallelBoundary("parallel_neumann_o1");
+  
   magnetic_flutter = options["magnetic_flutter"]
     .doc("Set magnetic flutter terms (Apar_flutter)?")
     .withDefault<bool>(false);
@@ -183,7 +188,7 @@ void Electromagnetic::transform(Options &state) {
     // Use previous value of Apar as initial guess
     Apar = aparSolver->solve(rhs, Apar);
   } else {
-    Apar = aparSolver->solve((-beta_em) * Ajpar, Apar);
+    Apar = aparSolver->solve((-beta_em) * Ajpar, zeroes);
   }
 
   // Save in the state

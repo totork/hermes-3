@@ -73,7 +73,7 @@ private:
 
   bool magnetic_flutter; ///< Set the magnetic flutter term?
   Field3D Apar_flutter;
-
+  Field3D zeroes;
   bool diagnose; ///< Output additional diagnostics?
 };
 
