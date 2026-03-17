@@ -806,7 +806,14 @@ void Vorticity::finally(const Options& state) {
 
   // Viscosity
   if (has_viscosity) {
-    ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
+    if (Vort.isFci()) {
+      Field3D dummy1;
+      Field3D dummy2;
+      
+      ddt(Vort) += (*dagp)(viscosity, Vort, dummy1, dummy2, false);
+    } else {
+      ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
+    }
   }
 
   Field3D dummy;
