@@ -174,6 +174,16 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   // Set coefficients for Boussinesq solve
   phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy));
 
+  zonal_neumann = options["zonal_neumann"]
+      .doc("Do a second laplace solve for the zonal neumann?")
+      .withDefault<bool>(false);
+  
+  if (zonal_neumann) {
+    phiSolver_zonalneumann = Laplacian::create(&options["laplacian_zonalneumann"]);
+    phiSolver_zonalneumann->setCoefC(average_atomic_mass / SQ(coord->Bxy));
+  }
+
+  
   if (phi_boundary_relax) {
     // Set the last update time to -1, so it will reset
     // the first time RHS function is called
@@ -541,6 +551,22 @@ void Vorticity::transform(Options& state) {
     }
   }
 
+
+  if (zonal_neumann) {
+    Field2D avg_phi = DC(phi);
+    if ( mesh->firstX() ) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	for (int k = 0; k < mesh->LocalNz; k++) {
+	  phi_plus_pi(mesh->xstart - 1, j, k) = 0.5 * ( avg_phi(mesh->xstart - 1 ,j) + avg_phi(mesh->xstart ,j) ) +
+	    0.5 * (Pi_hat(mesh->xstart - 1, j, k) + Pi_hat(mesh->xstart, j, k));
+	  phi_plus_pi(mesh->xstart - 2, j, k) = phi_plus_pi(mesh->xstart - 1, j, k);
+	}
+      }
+    }
+    const auto tosolve = Vort * (Bsq / average_atomic_mass);
+    phi = phiSolver_zonalneumann->solve(tosolve, phi_plus_pi) - Pi_hat; 
+  }
+  
   // Ensure that potential is set in the communication guard cells
   mesh->communicate(phi);
 

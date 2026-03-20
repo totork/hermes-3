@@ -123,6 +123,10 @@ private:
 
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
 
+  std::unique_ptr<Laplacian> phiSolver_zonalneumann;
+
+  bool zonal_neumann;
+  
   bool sheath_boundary; ///< Set outer boundary to j=0?
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
