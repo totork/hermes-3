@@ -862,7 +862,8 @@ void Vorticity::finally(const Options& state) {
     // Adds dissipation term like in other equations, but depending on gradient of
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    ddt(Vort) -= phi_diss_factor * FV::Div_par(-phi, 0.0, sound_speed);
+    Field3D dummy;
+    ddt(Vort) -= phi_diss_factor * FV::Div_par(-phi, 0.0, sound_speed, dummy, true, false);
   }
 
   if (hyper > 0) {
