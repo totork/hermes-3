@@ -863,7 +863,7 @@ void Vorticity::finally(const Options& state) {
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
     Field3D dummy;
-    ddt(Vort) -= phi_diss_factor * FV::Div_par(-phi, 0.0, sound_speed, dummy, true, false);
+    ddt(Vort) -= phi_diss_factor * FV::Div_par_mod(-phi, 0.0, sound_speed, dummy, true, false);
   }
 
   if (hyper > 0) {
