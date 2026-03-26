@@ -144,6 +144,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                            .doc("Relax x boundaries of phi towards Neumann?")
                            .withDefault<bool>(false);
 
+  phi_diss_factor = options["phi_diss_factor"]
+    .doc("Prefactor to increase phi dissipation")
+    .withDefault<BoutReal>(1.0);
+  
   phi_sheath_dissipation = options["phi_sheath_dissipation"]
     .doc("Add dissipation when phi < 0.0 at the sheath")
     .withDefault<bool>(false);
@@ -858,7 +862,7 @@ void Vorticity::finally(const Options& state) {
     // Adds dissipation term like in other equations, but depending on gradient of
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
+    ddt(Vort) -= phi_diss_factor * FV::Div_par(-phi, 0.0, sound_speed);
   }
 
   if (hyper > 0) {
