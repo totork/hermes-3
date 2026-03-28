@@ -65,6 +65,8 @@ private:
   Field3D alpha_em; // Coefficient
   BoutReal beta_em; // Normalisation coefficient mu_0 e T n / B^2
 
+  Field3D Apar_bar;
+  
   std::unique_ptr<Laplacian> aparSolver; // Laplacian solver in X-Z
   bool use_normdensity;
   bool const_gradient; // Set neumann boundaries by extrapolation
@@ -72,6 +74,7 @@ private:
   BoutReal last_time;  // The last time the boundaries were updated
 
   bool magnetic_flutter; ///< Set the magnetic flutter term?
+  BoutReal flutter_time;
   Field3D Apar_flutter;
   Field3D zeroes;
   bool diagnose; ///< Output additional diagnostics?

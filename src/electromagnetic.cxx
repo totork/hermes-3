@@ -85,6 +85,18 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
   magnetic_flutter = options["magnetic_flutter"]
     .doc("Set magnetic flutter terms (Apar_flutter)?")
     .withDefault<bool>(false);
+
+  if (magnetic_flutter && bout::globals::mesh->isFci()) {
+    const BoutReal Lnorm = units["meters"];
+    solver->add(Apar_bar, "Apar_bar");
+    flutter_time = options["flutter_time"]
+      .doc("Multiplication factor of the alfen speed in temrs of meters ")
+      .withDefault(1.0) / Lnorm;
+    
+
+  }
+  
+  
 }
 
 void Electromagnetic::restartVars(Options& state) {
@@ -110,6 +122,12 @@ void Electromagnetic::restartVars(Options& state) {
 
 void Electromagnetic::transform(Options &state) {
   AUTO_TRACE();
+
+  if (magnetic_flutter && bout::globals::mesh->isFci()) {
+    Apar_bar.applyBoundary();
+    bout::globals::mesh->communicate(Apar_bar);
+    Apar_bar.applyParallelBoundary();
+  }
   
   Options& allspecies = state["species"];
 
@@ -233,33 +251,47 @@ void Electromagnetic::transform(Options &state) {
   }
 
   if (magnetic_flutter) {
-    // Magnetic flutter terms
-    Apar_flutter = Apar - DC(Apar);
 
-    // Ensure that guard cells are communicated
-    Apar.getMesh()->communicate(Apar_flutter);
+    if (bout::globals::mesh->isFci()) {
+      Apar_flutter = Apar - Apar_bar;
+      ddt(Apar_bar) = Apar_flutter / flutter_time;
 
-    set(state["fields"]["Apar_flutter"], Apar_flutter);
+      Apar_flutter.applyBoundary("neumann");
+      bout::globals::mesh->communicate(Apar_flutter);
+      Apar_flutter.applyParallelBoundary("parallel_neumann_o1");
+
+      set(state["fields"]["Apar_flutter"], Apar_flutter);
+      
+    } else {
+    
+      // Magnetic flutter terms
+      Apar_flutter = Apar - DC(Apar);
+
+      // Ensure that guard cells are communicated
+      Apar.getMesh()->communicate(Apar_flutter);
+
+      set(state["fields"]["Apar_flutter"], Apar_flutter);
 
 #if 0
-    // Create a vector A from covariant components
-    // (A^x, A^y, A^z)
-    // Note: b = e_y / (JB)
-    const auto* coords = Apar.getCoordinates();
-    Vector3D A;
-    A.covariant = true;
-    A.x = A.z = 0.0;
-    A.y = Apar_flutter * (coords->J * coords->Bxy);
+      // Create a vector A from covariant components
+      // (A^x, A^y, A^z)
+      // Note: b = e_y / (JB)
+      const auto* coords = Apar.getCoordinates();
+      Vector3D A;
+      A.covariant = true;
+      A.x = A.z = 0.0;
+      A.y = Apar_flutter * (coords->J * coords->Bxy);
 
-    // Perturbed magnetic field vector
-    // Note: Contravariant components (dB_x, dB_y, dB_z)
-    Vector3D delta_B = Curl(A);
+      // Perturbed magnetic field vector
+      // Note: Contravariant components (dB_x, dB_y, dB_z)
+      Vector3D delta_B = Curl(A);
 
-    // Set components of the perturbed unit vector
-    // Note: Options can't (yet) contain vectors
-    set(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy);
-    set(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy);
+      // Set components of the perturbed unit vector
+      // Note: Options can't (yet) contain vectors
+      set(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy);
+      set(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy);
 #endif
+    }
   }
 }
 
