@@ -32,9 +32,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   yboundary.init(options);
   
   // Evolving variables e.g name is "h" or "h+"
-  solver->add(Nn, std::string("N") + name);
 
-
+  evolve_density = options["evolve_density"]
+                        .doc("Evolve neutral density?")
+                        .withDefault<bool>(true);
+  
   evolve_momentum = options["evolve_momentum"]
                         .doc("Evolve parallel neutral momentum?")
                         .withDefault<bool>(true);
@@ -48,6 +50,22 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         .doc("Is this MMS? If yes, stop sources and sinks")
                         .withDefault<bool>(false);  
 
+  if (evolve_density) {
+    solver->add(Nn, std::string("N") + name);
+  } else {
+    output_warn.write(
+        "WARNING: Not evolving neutral parallel momentum. NVn and Vn set to zero\n");
+    Nn = 0.0;
+    
+    initial_Nn = options["initial_Nn"]
+                        .doc("Initial neutral density when it is not evolved?")
+                        .withDefault(Field3D{0.0}) / Nnorm;
+
+    mesh->communicate(initial_Nn);
+    initial_Nn.applyParallelBoundary("parallel_neumann_o1");
+    
+  }
+  
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
   } else {
@@ -246,6 +264,10 @@ void NeutralMixed::transform(Options& state) {
     NVn.clearParallelSlices();
   }
 
+  if (!evolve_density) {
+    Nn = initial_Nn;
+  }
+  
   if (!evolve_momentum) {
     NVn = Nn * initial_Vn * AA;
   }

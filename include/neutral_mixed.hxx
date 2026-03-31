@@ -61,8 +61,8 @@ private:
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
-  bool evolve_pressure;
-  Field3D initial_Vn, initial_Tn;
+  bool evolve_pressure, evolve_density;
+  Field3D initial_Vn, initial_Tn, initial_Nn;
   bool freeze_low_density;
   bool use_finite_difference;
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
