@@ -33,16 +33,21 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   
   // Evolving variables e.g name is "h" or "h+"
   solver->add(Nn, std::string("N") + name);
-  solver->add(Pn, std::string("P") + name);
+
 
   evolve_momentum = options["evolve_momentum"]
                         .doc("Evolve parallel neutral momentum?")
                         .withDefault<bool>(true);
 
+  evolve_pressure = options["evolve_pressure"]
+                        .doc("Evolve pressure of neutrals?")
+                        .withDefault<bool>(true);
+  
+  
   isMMS = options["isMMS"]
                         .doc("Is this MMS? If yes, stop sources and sinks")
-                        .withDefault<bool>(false);
-  
+                        .withDefault<bool>(false);  
+
   if (evolve_momentum) {
     solver->add(NVn, std::string("NV") + name);
   } else {
@@ -50,8 +55,35 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
         "WARNING: Not evolving neutral parallel momentum. NVn and Vn set to zero\n");
     NVn = 0.0;
     Vn = 0.0;
+
+    initial_Vn = options["initial_Vn"]
+			.doc("Initial neutral velocity when momentum is not evolved?")
+                        .withDefault(Field3D{0.0}) / (meters/seconds);
+    mesh->communicate(initial_Vn);
+    initial_Vn.applyParallelBoundary("parallel_neumann_o1");
   }
 
+  if (evolve_pressure) {
+    solver->add(Pn, std::string("P") + name);
+  } else {
+    output_warn.write(
+        "WARNING: Not evolving neutral parallel momentum. NVn and Vn set to zero\n");
+    Pn = 0.0;
+    Tn = 0.0;
+
+    initial_Tn = options["initial_Tn"]
+                        .doc("Initial neutral temperature when pressure is not evolved?")
+			.withDefault(Field3D{0.0}) / Tnorm;
+
+    mesh->communicate(initial_Tn);
+    initial_Tn.applyParallelBoundary("parallel_neumann_o1");
+    
+  }
+
+  
+  
+  
+  
   sheath_ydown = options["sheath_ydown"]
                      .doc("Enable wall boundary conditions at ydown")
                      .withDefault<bool>(true);
@@ -212,6 +244,14 @@ void NeutralMixed::transform(Options& state) {
     Nn.clearParallelSlices();
     Pn.clearParallelSlices();
     NVn.clearParallelSlices();
+  }
+
+  if (!evolve_momentum) {
+    NVn = Nn * initial_Vn * AA;
+  }
+
+  if (!evolve_pressure) {
+    Pn = Nn * initial_Tn;
   }
   
   Nn = floor(Nn, 1e-3 * density_floor);
@@ -412,65 +452,67 @@ void NeutralMixed::finally(const Options& state) {
   
   /////////////////////////////////////////////////////
   // Neutral pressure
-  TRACE("Neutral pressure");
+  if (evolve_pressure) {
+    TRACE("Neutral pressure");
 
-  if (evolve_momentum) {
-    if (!isMMS) {
-      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
+    if (evolve_momentum) {
+      if (!isMMS) {
+	ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
+      } else {
+	ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
+      }
+      ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
     } else {
-      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
+      ddt(Pn) = 0.0;
     }
-    ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
-  } else {
-    ddt(Pn) = 0.0;
-  }
   
-  if (!Pn.isFci()) {                                                                     // Perpendicular advection
-    ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
-  } else {
-    bool upwind = false;
-    if (!use_finite_difference) { 
-      ddt(Pn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
-    } else {
-      ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(DnnPn, logPnlim);
-    }
-  }
-
-  // The factor here is 5/2 as we're advecting internal energy and pressure.
-  //ef_adv_par_ylow  *= 5/2;
-  //ef_adv_perp_xlow *= 5/2; 
-  //ef_adv_perp_ylow *= 5/2;
-
-  if (neutral_conduction) {
-    ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
-    
-    if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
-      ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
+    if (!Pn.isFci()) {                                                                     // Perpendicular advection
+      ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
     } else {
       bool upwind = false;
-      if (!use_finite_difference) {
-	ddt(Pn) += (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      if (!use_finite_difference) { 
+	ddt(Pn) += (5.0 / 3.0) * (*dagp)(DnnPn, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
       } else {
-	ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
+	ddt(Pn) += (5.0 / 3.0) * Div_a_Grad_perp_curv(DnnPn, logPnlim);
       }
     }
-    // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
-    //ef_cond_perp_xlow *= 3/2;
-    //ef_cond_perp_ylow *= 3/2;
-    //ef_cond_par_ylow *= 3/2;
-  }
-  
-  Sp = pressure_source;
-  if (localstate.isSet("energy_source")) {
-    Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
-  }
-  if (!isMMS) {
-    ddt(Pn) += Sp;
-  }
 
-  if (T_lowsource > 0.0) {
-    ddt(Pn) += low_sourceterm(Tn, T_lowsource, lowsource_scale);
-  }
+    // The factor here is 5/2 as we're advecting internal energy and pressure.
+    //ef_adv_par_ylow  *= 5/2;
+    //ef_adv_perp_xlow *= 5/2; 
+    //ef_adv_perp_ylow *= 5/2;
+
+    if (neutral_conduction) {
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
+    
+      if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
+	ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
+      } else {
+	bool upwind = false;
+	if (!use_finite_difference) {
+	  ddt(Pn) += (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+	} else {
+	  ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
+	}
+      }
+      // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
+      //ef_cond_perp_xlow *= 3/2;
+      //ef_cond_perp_ylow *= 3/2;
+      //ef_cond_par_ylow *= 3/2;
+    }
+  
+    Sp = pressure_source;
+    if (localstate.isSet("energy_source")) {
+      Sp += (2. / 3) * get<Field3D>(localstate["energy_source"]);
+    }
+    if (!isMMS) {
+      ddt(Pn) += Sp;
+    }
+
+    if (T_lowsource > 0.0) {
+      ddt(Pn) += low_sourceterm(Tn, T_lowsource, lowsource_scale);
+    }
+  } // End evolve_pressure
   
   if (evolve_momentum) {
 
