@@ -234,32 +234,34 @@ void Electromagnetic::transform(Options &state) {
 
   if (magnetic_flutter) {
     // Magnetic flutter terms
-    Apar_flutter = Apar - DC(Apar);
-
+    if (bout::globals::mesh->isFci()){
+      set(state["fields"]["Apar_flutter"], Apar);
+    } else {
+      Apar_flutter = Apar - DC(Apar);
     // Ensure that guard cells are communicated
-    Apar.getMesh()->communicate(Apar_flutter);
+      Apar.getMesh()->communicate(Apar_flutter);
+      set(state["fields"]["Apar_flutter"], Apar_flutter);
 
-    set(state["fields"]["Apar_flutter"], Apar_flutter);
-
-#if 0
-    // Create a vector A from covariant components
-    // (A^x, A^y, A^z)
-    // Note: b = e_y / (JB)
+      #if 0
+    // Create a vector A from covariant components                                                                                                                                                         
+    // (A^x, A^y, A^z)                                                                                                                                                                                     
+    // Note: b = e_y / (JB)                                                                                                                                                                                
     const auto* coords = Apar.getCoordinates();
     Vector3D A;
     A.covariant = true;
     A.x = A.z = 0.0;
     A.y = Apar_flutter * (coords->J * coords->Bxy);
 
-    // Perturbed magnetic field vector
-    // Note: Contravariant components (dB_x, dB_y, dB_z)
+    // Perturbed magnetic field vector                                                                                                                                                                     
+    // Note: Contravariant components (dB_x, dB_y, dB_z)                                                                                                                                                   
     Vector3D delta_B = Curl(A);
 
-    // Set components of the perturbed unit vector
-    // Note: Options can't (yet) contain vectors
+    // Set components of the perturbed unit vector                                                                                                                                                         
+    // Note: Options can't (yet) contain vectors                                                                                                                                                           
     set(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy);
     set(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy);
 #endif
+    }
   }
 }
 

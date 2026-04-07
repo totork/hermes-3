@@ -353,7 +353,7 @@ void EvolvePressure::finally(const Options& state) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
-      ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA) * bracket_factor;
     }
 
     if (numerical_viscous_heating || diagnose) {

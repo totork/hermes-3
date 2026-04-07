@@ -261,7 +261,7 @@ void EvolveMomentum::finally(const Options &state) {
 
     if (species.isSet("pressure")) {
       Field3D P = get<Field3D>(species["pressure"]);
-      ddt(NV) -= bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(NV) -= bracket(P, Apar_flutter, BRACKET_ARAKAWA) * bracket_factor;
     }
   }
 
