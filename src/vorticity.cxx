@@ -830,7 +830,7 @@ void Vorticity::finally(const Options& state) {
       // Div_par(jpar) = B * Grad_par(jpar / B)
       // Using the approximation for small delta-B/B
       // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
-      ddt(Vort) += coord->Bxy * bracket((Z/A)*NV / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(Vort) += coord->Bxy * bracket((Z/A)*NV / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA)*bracket_factor;
     }
   }
 
