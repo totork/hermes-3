@@ -473,9 +473,9 @@ void EvolvePressure::finally(const Options& state) {
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       Field3D db_dot_T = bracket(T, Apar_flutter, BRACKET_ARAKAWA);
       Field3D b0_dot_T = Grad_par(T);
-      mesh->communicate(db_dot_T, b0_dot_T);
       db_dot_T.applyBoundary("neumann");
       b0_dot_T.applyBoundary("neumann");
+      mesh->communicate(db_dot_T, b0_dot_T);
       ddt(P) += (2. / 3) * (Div_par(kappa_par * db_dot_T) -
                             Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter));
     }
