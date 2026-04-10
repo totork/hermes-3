@@ -235,6 +235,7 @@ void Electromagnetic::transform(Options &state) {
   if (magnetic_flutter) {
     // Magnetic flutter terms
     if (bout::globals::mesh->isFci()){
+      Apar_flutter = Apar;
       set(state["fields"]["Apar_flutter"], Apar);
     } else {
       Apar_flutter = Apar - DC(Apar);
