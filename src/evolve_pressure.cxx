@@ -218,6 +218,15 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
     .withDefault(-1.0);
 
+  kappa_limit_grillix = options["kappa_limit_grillix"]
+    .doc("Use grillix-style flux limiter?")
+    .withDefault<bool>(false);
+
+  kappa_limit_Lpar = options["kappa_limit_Lpar"]
+    .doc("Parallel decay length, given by T / grad_par Te")
+    .withDefault(1.0) / Lnorm;
+  
+
   if (mesh->isFci()) {
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
@@ -419,7 +428,15 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
-    if (kappa_limit_alpha > 0.0) {
+    if (kappa_limit_alpha > 0.0 && kappa_limit_grillix) {
+
+      // Based on https://iopscience.iop.org/article/10.1088/1741-4326/ac1e61
+      // Equation 11
+      // kappa_limit_Lpar = q_95 * R0
+      Field3D denom = 1.0 + kappa_par / (kappa_limit_alpha * sqrt(T / AA) * N * kappa_limit_Lpar);
+      kappa_par /= denom;
+      
+    } else if (kappa_limit_alpha > 0.0) {
       /*
        * Flux limiter, as used in SOLPS.
        *
