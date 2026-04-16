@@ -138,7 +138,7 @@ private:
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
   BoutReal phi_boundary_last_update; ///< Time when last updated
   bool phi_core_averagey; ///< Average phi core boundary in Y?
-  
+  bool magnetic_flutter;
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
   Field3D logB;

@@ -62,6 +62,11 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
           .doc("Include diamagnetic drift in polarisation current?")
           .withDefault<bool>(true);
 
+  magnetic_flutter=
+      options["magnetic_flutter"]
+          .doc("Use flutter terms??")
+          .withDefault<bool>(true);
+  
   diamagnetic_bracketform = options["diamagnetic_bracketform"]
                         .doc("Include diamagnetic form that uses arakawa brackets? FCI version")
                         .withDefault<bool>(mesh->isFci());
@@ -823,7 +828,7 @@ void Vorticity::finally(const Options& state) {
     ddt(Vort) += Z * FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow,  false,
 						   false, true);
     
-    if (state["fields"].isSet("Apar_flutter")) {
+    if (state["fields"].isSet("Apar_flutter") && magnetic_flutter) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
 

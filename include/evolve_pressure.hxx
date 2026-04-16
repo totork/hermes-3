@@ -103,7 +103,7 @@ private:
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
-
+  bool magnetic_flutter;
   BoutReal adapt_source;
   
   BoutReal hyper_z; ///< Hyper-diffusion

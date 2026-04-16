@@ -50,7 +50,7 @@ private:
   BoutReal pressure_floor;
   bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
   BoutReal scale_ExB;
-
+  bool magnetic_flutter;
   BoutReal hyper_z;  ///< Hyper-diffusion
   BoutReal hyper_nv;
   std::string Vname;

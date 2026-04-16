@@ -168,6 +168,11 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     }
   }
 
+  magnetic_flutter=
+      p_options["magnetic_flutter"]
+          .doc("Use flutter terms??")
+          .withDefault<bool>(true);
+  
   neumann_boundary_average_z = p_options["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
@@ -349,7 +354,7 @@ void EvolvePressure::finally(const Options& state) {
       flow_ylow *= 5. / 2; // Energy flow
     }
 
-    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter") and magnetic_flutter) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
@@ -464,7 +469,7 @@ void EvolvePressure::finally(const Options& state) {
       }
     }
 
-    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter") and magnetic_flutter) {
       // Magnetic flutter term. The operator splits into 4 pieces:
       // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
       //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))
