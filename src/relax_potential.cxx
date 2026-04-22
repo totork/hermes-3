@@ -171,7 +171,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                    .doc("Use core dissipation of vorticity? Grid field required!")
                    .withDefault<bool>(false);
 
-  if (core_dissipation) {
+  if (core_dissipation || (vort_timedissipation > 0.0)) {
     mesh->get(is_SOL, "is_SOL", 0.0);
   }
   
@@ -380,7 +380,7 @@ void RelaxPotential::finally(const Options& state) {
   // Solve diffusion equation for potential
 
   if (vort_timedissipation > 0.0) {
-    ddt(Vort) -= vort_timedissipation * Vort;
+    ddt(Vort) -= (1.0 - is_SOL) * vort_timedissipation * Vort;
   } 
 
   if (core_dissipation) {
