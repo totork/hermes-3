@@ -90,6 +90,9 @@ private:
   Field3D viscosity_core;
   Field3D viscosity_par;
   Field3D ones;
+  Field3D zeroes;
+  Field3D is_SOL;
+  bool core_dissipation;
   bool phi_dissipation; /// Parallel dissipation of potential
   BoutReal vort_timedissipation;
   

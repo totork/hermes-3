@@ -161,6 +161,20 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   ones.applyBoundary("neumann");
   mesh->communicate(ones);
   ones.applyParallelBoundary("parallel_neumann_o1");
+
+  zeroes = 0.0;
+  zeroes.applyBoundary("neumann");
+  mesh->communicate(zeroes);
+  zeroes.applyParallelBoundary("parallel_neumann_o1");
+  
+  core_dissipation = options["core_dissipation"]
+                   .doc("Use core dissipation of vorticity? Grid field required!")
+                   .withDefault<bool>(false);
+
+  if (core_dissipation) {
+    mesh->get(is_SOL, "is_SOL", 0.0);
+  }
+  
   
 }
 
@@ -368,6 +382,13 @@ void RelaxPotential::finally(const Options& state) {
   if (vort_timedissipation > 0.0) {
     ddt(Vort) -= vort_timedissipation * Vort;
   } 
+
+  if (core_dissipation) {
+    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+    Field3D dummy;
+    ddt(Vort) -= (1.0 - is_SOL) * FV::Div_par_mod<hermes::Limiter>(Vort, zeroes, sound_speed, dummy);
+  }
+  
   
   if (boussinesq) {
 
