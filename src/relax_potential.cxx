@@ -380,7 +380,7 @@ void RelaxPotential::finally(const Options& state) {
   // Solve diffusion equation for potential
 
   if (vort_timedissipation > 0.0) {
-    ddt(Vort) -= (1.0 - is_SOL) * vort_timedissipation * Vort;
+    ddt(Vort) -= (1.0 - is_SOL) * Vort / vort_timedissipation;
   } 
 
   if (core_dissipation) {
