@@ -439,7 +439,7 @@ void RelaxPotential::finally(const Options& state) {
       if (diamagnetic_polarisation and species.isSet("pressure")) {
         // Calculate the diamagnetic flow contribution
         const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += (*dagp)(Ai / Bsq, Pi, flow_xlow_phi, flow_zlow_phi, false);
+        phi_vort += (*dagp)(Ai / Bsq / Zi, Pi, flow_xlow_phi, flow_zlow_phi, false);
       }
     }
 
