@@ -120,7 +120,7 @@ private:
   BoutReal average_atomic_mass; // Weighted average atomic mass, for polarisaion current (Boussinesq approximation)
   bool poloidal_flows;   ///< Include poloidal ExB flow?
   bool bndry_flux;  ///< Allow flows through radial boundaries?
-
+  bool boussinesq;
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
 
   std::unique_ptr<Laplacian> phiSolver_zonalneumann;
