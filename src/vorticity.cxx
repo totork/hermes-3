@@ -450,7 +450,7 @@ void Vorticity::transform(Options& state) {
       }
 
       // Sheath multiplier Te -> phi (2.84522 for Deuterium if Ti = 0)
-      if ( mesh->firstX()) {
+      if ( mesh->firstX() && !mesh->isFci()) {
 	for (int j = mesh->ystart; j <= mesh->yend; j++) {
 	  BoutReal teavg = 0.0; // Average Te in Z
 
@@ -462,6 +462,7 @@ void Vorticity::transform(Options& state) {
 	
 	  // Set midpoint (boundary) value
 	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    BoutReal phivalue = sheathmult * teavg;
 	    phi(mesh->xstart - 1, j, k) = 2. * phivalue - phi(mesh->xstart, j, k);
 
 	    // Note: This seems to make a difference, but don't know why.
@@ -474,15 +475,9 @@ void Vorticity::transform(Options& state) {
 
       if ( mesh->lastX()) {
 	for (int j = mesh->ystart; j <= mesh->yend; j++) {
-	  BoutReal teavg = 0.0; // Average Te in Z
-
-	  for (int k = 0; k < mesh->LocalNz; k++) {
-	    teavg += Te(mesh->xend, j, k);
-	  }
-	  teavg /= mesh->LocalNz;
-	  BoutReal phivalue = sheathmult * teavg;
 	  // Set midpoint (boundary) value
 	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    BoutReal phivalue = sheathmult * 0.5 * (Te(mesh->xend, j, k) + Te(mesh->xend+1, j, k));
 	    phi(mesh->xend + 1, j, k) = 2. * phivalue - phi(mesh->xend, j, k);
 
 	    // Note: This seems to make a difference, but don't know why.
@@ -608,9 +603,8 @@ void Vorticity::transform(Options& state) {
       RHS += (*dagp)(AA / Bsq / charge, P, dummy1, dummy2, false);
 
     }
-    RHS.applyBoundary("neumann");
+    RHS.applyBoundary("free_o2");
     mesh->communicate(RHS);
-
     
     //////////////////////////////////////////////////////////////////
 
@@ -635,7 +629,7 @@ void Vorticity::transform(Options& state) {
     }
 
     // Sheath multiplier Te -> phi (2.84522 for Deuterium if Ti = 0)
-    if ( mesh->firstX()) {
+    if ( mesh->firstX() && !mesh->isFci()) {
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
         BoutReal teavg = 0.0; // Average Te in Z
 
@@ -659,21 +653,16 @@ void Vorticity::transform(Options& state) {
 
     if ( mesh->lastX()) {
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal teavg = 0.0; // Average Te in Z
-
-	for (int k = 0; k < mesh->LocalNz; k++) {
-	  teavg += Te(mesh->xend, j, k);
-	}
-	teavg /= mesh->LocalNz;
-	BoutReal phivalue = sheathmult * teavg;
         // Set midpoint (boundary) value
         for (int k = 0; k < mesh->LocalNz; k++) {
+	  BoutReal phivalue = sheathmult * 0.5 * (Te(mesh->xend, j, k) + Te(mesh->xend+1, j, k));
           phi(mesh->xend + 1, j, k) = 2. * phivalue - phi(mesh->xend, j, k);
 
           // Note: This seems to make a difference, but don't know why.
           // Without this, get convergence failures with no apparent instability
           // (all fields apparently smooth, well behaved)
           phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+
         }
       }
     }
