@@ -193,7 +193,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   
   if (zonal_neumann) {
     phiSolver_zonalneumann = Laplacian::create(&options["laplacian_zonalneumann"]);
-    phiSolver_zonalneumann->setCoefC(average_atomic_mass / SQ(coord->Bxy));
   }
 
   
@@ -573,6 +572,7 @@ void Vorticity::transform(Options& state) {
 	  }
 	}
       }
+      phiSolver_zonalneumann->setCoefC(average_atomic_mass / SQ(coord->Bxy));
       const auto tosolve = Vort * (Bsq / average_atomic_mass);
       phi = phiSolver_zonalneumann->solve(tosolve, phi_plus_pi) - Pi_hat;
     }
@@ -693,6 +693,7 @@ void Vorticity::transform(Options& state) {
 
 
     if (zonal_neumann) {
+      phiSolver_zonalneumann->setCoefC(AN_Bsq);
       Field2D avg_phi = DC(phi);
       if ( mesh->firstX() ) {
         for (int j = mesh->ystart; j <= mesh->yend; j++) {
@@ -702,6 +703,19 @@ void Vorticity::transform(Options& state) {
           }
         }
       }
+
+      if ( mesh->lastX()) {
+	for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        
+	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    phi(mesh->xend + 1, j, k) = 0.5 * (phi(mesh->xend + 1, j, k) + phi(mesh->xend, j, k));	    
+	    phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+	  }
+	}
+      }
+
+      
+      
       phi = phiSolver_zonalneumann->solve(tosolve, phi);
     }
 
