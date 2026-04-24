@@ -562,6 +562,22 @@ void Vorticity::transform(Options& state) {
       }
     }
 
+    if (zonal_neumann) {
+      Field2D avg_phi = DC(phi);
+      if ( mesh->firstX() ) {
+	for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    phi_plus_pi(mesh->xstart - 1, j, k) = 0.5 * ( avg_phi(mesh->xstart - 1 ,j) + avg_phi(mesh->xstart ,j) ) +
+	      0.5 * (Pi_hat(mesh->xstart - 1, j, k) + Pi_hat(mesh->xstart, j, k));
+	    phi_plus_pi(mesh->xstart - 2, j, k) = phi_plus_pi(mesh->xstart - 1, j, k);
+	  }
+	}
+      }
+      const auto tosolve = Vort * (Bsq / average_atomic_mass);
+      phi = phiSolver_zonalneumann->solve(tosolve, phi_plus_pi) - Pi_hat;
+    }
+
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -671,7 +687,23 @@ void Vorticity::transform(Options& state) {
 
     phiSolver->setCoefC(AN_Bsq);
 
-    phi = phiSolver->solve((Vort-RHS)/AN_Bsq, phi) ;
+    Field3D tosolve = (Vort-RHS)/AN_Bsq;
+    
+    phi = phiSolver->solve(tosolve, phi) ;
+
+
+    if (zonal_neumann) {
+      Field2D avg_phi = DC(phi);
+      if ( mesh->firstX() ) {
+        for (int j = mesh->ystart; j <= mesh->yend; j++) {
+          for (int k = 0; k < mesh->LocalNz; k++) {
+            phi(mesh->xstart - 1, j, k) = 0.5 * ( avg_phi(mesh->xstart - 1 ,j) + avg_phi(mesh->xstart ,j) ) ;
+	    phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
+          }
+        }
+      }
+      phi = phiSolver_zonalneumann->solve(tosolve, phi);
+    }
 
 
     
