@@ -590,6 +590,10 @@ void Vorticity::transform(Options& state) {
 	  continue;
 	}
 
+	if (charge < 0.0) {
+	  continue;
+	}
+
 	// Don't need sheath boundary
 	const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
 	const auto N = GET_NOBOUNDARY(Field3D, species["density"]);
@@ -618,6 +622,11 @@ void Vorticity::transform(Options& state) {
       if (fabs(charge) < 1e-5) {
 	// No charge                                                                                                                                                                                     
 	continue;
+      }
+
+      if (charge < 0.0) {
+        // No electrons                                                                                                                                                                                   
+        continue;
       }
 
       // Don't need sheath boundary                                                                                                                                                                      
