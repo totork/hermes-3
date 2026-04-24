@@ -168,6 +168,11 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     }
   }
 
+  magnetic_flutter=
+      p_options["magnetic_flutter"]
+          .doc("Use flutter terms??")
+          .withDefault<bool>(true);
+  
   neumann_boundary_average_z = p_options["neumann_boundary_average_z"]
     .doc("Apply neumann boundary with Z average?")
     .withDefault<bool>(false);
@@ -212,6 +217,15 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   kappa_limit_alpha = options["kappa_limit_alpha"]
     .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 for electrons, 1 for ions.")
     .withDefault(-1.0);
+
+  kappa_limit_grillix = options["kappa_limit_grillix"]
+    .doc("Use grillix-style flux limiter?")
+    .withDefault<bool>(false);
+
+  kappa_limit_Lpar = options["kappa_limit_Lpar"]
+    .doc("Parallel decay length, given by T / grad_par Te")
+    .withDefault(1.0) / Lnorm;
+  
 
   if (mesh->isFci()) {
     const auto coord = mesh->getCoordinates();
@@ -349,11 +363,11 @@ void EvolvePressure::finally(const Options& state) {
       flow_ylow *= 5. / 2; // Energy flow
     }
 
-    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter") and magnetic_flutter) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
-      ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA) * bracket_factor;
     }
 
     if (numerical_viscous_heating || diagnose) {
@@ -414,7 +428,15 @@ void EvolvePressure::finally(const Options& state) {
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
-    if (kappa_limit_alpha > 0.0) {
+    if (kappa_limit_alpha > 0.0 && kappa_limit_grillix) {
+
+      // Based on https://iopscience.iop.org/article/10.1088/1741-4326/ac1e61
+      // Equation 11
+      // kappa_limit_Lpar = q_95 * R0
+      Field3D denom = 1.0 + kappa_par / (kappa_limit_alpha * sqrt(T / AA) * N * kappa_limit_Lpar);
+      kappa_par /= denom;
+      
+    } else if (kappa_limit_alpha > 0.0) {
       /*
        * Flux limiter, as used in SOLPS.
        *
@@ -464,7 +486,7 @@ void EvolvePressure::finally(const Options& state) {
       }
     }
 
-    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter") and magnetic_flutter) {
       // Magnetic flutter term. The operator splits into 4 pieces:
       // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
       //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))
@@ -473,9 +495,9 @@ void EvolvePressure::finally(const Options& state) {
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       Field3D db_dot_T = bracket(T, Apar_flutter, BRACKET_ARAKAWA);
       Field3D b0_dot_T = Grad_par(T);
-      mesh->communicate(db_dot_T, b0_dot_T);
       db_dot_T.applyBoundary("neumann");
       b0_dot_T.applyBoundary("neumann");
+      mesh->communicate(db_dot_T, b0_dot_T);
       ddt(P) += (2. / 3) * (Div_par(kappa_par * db_dot_T) -
                             Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter));
     }

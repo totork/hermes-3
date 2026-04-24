@@ -120,12 +120,17 @@ private:
   BoutReal average_atomic_mass; // Weighted average atomic mass, for polarisaion current (Boussinesq approximation)
   bool poloidal_flows;   ///< Include poloidal ExB flow?
   bool bndry_flux;  ///< Allow flows through radial boundaries?
-
+  bool boussinesq;
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
 
+  std::unique_ptr<Laplacian> phiSolver_zonalneumann;
+
+  bool zonal_neumann;
+  
   bool sheath_boundary; ///< Set outer boundary to j=0?
   bool vort_dissipation; ///< Parallel dissipation of vorticity
   bool phi_dissipation;  ///< Parallel dissipation of potential
+  BoutReal phi_diss_factor;
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
   bool damp_core_vorticity; ///< Damp axisymmetric component of vorticity
 
@@ -133,7 +138,7 @@ private:
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
   BoutReal phi_boundary_last_update; ///< Time when last updated
   bool phi_core_averagey; ///< Average phi core boundary in Y?
-  
+  bool magnetic_flutter;
   bool split_n0; // Split phi into n=0 and n!=0 components
   LaplaceXY* laplacexy; // Laplacian solver in X-Y (n=0)
   Field3D logB;

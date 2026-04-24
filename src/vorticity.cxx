@@ -1,6 +1,9 @@
 
 #include "../include/vorticity.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/hermes_utils.hxx"
+#include "../include/hermes_build_config.hxx"
+
 
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
@@ -14,11 +17,6 @@
 using bout::globals::mesh;
 
 namespace {
-BoutReal floor(BoutReal value, BoutReal min) {
-  if (value < min)
-    return min;
-  return value;
-}
 
 Ind3D indexAt(const Field3D& f, int x, int y, int z) {
   int ny = f.getNy();
@@ -51,6 +49,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   output_ddt = options["output_ddt"]
                    .doc("Include ExB advection?")
                    .withDefault<bool>(false);
+
+  boussinesq = options["boussinesq"]
+                   .doc("Use Boussinesq approximation?")
+                   .withDefault<bool>(true);
   
   diamagnetic =
       options["diamagnetic"].doc("Include diamagnetic current?").withDefault<bool>(true);
@@ -64,6 +66,11 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
           .doc("Include diamagnetic drift in polarisation current?")
           .withDefault<bool>(true);
 
+  magnetic_flutter=
+      options["magnetic_flutter"]
+          .doc("Use flutter terms??")
+          .withDefault<bool>(true);
+  
   diamagnetic_bracketform = options["diamagnetic_bracketform"]
                         .doc("Include diamagnetic form that uses arakawa brackets? FCI version")
                         .withDefault<bool>(mesh->isFci());
@@ -146,6 +153,10 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
                            .doc("Relax x boundaries of phi towards Neumann?")
                            .withDefault<bool>(false);
 
+  phi_diss_factor = options["phi_diss_factor"]
+    .doc("Prefactor to increase phi dissipation")
+    .withDefault<BoutReal>(1.0);
+  
   phi_sheath_dissipation = options["phi_sheath_dissipation"]
     .doc("Add dissipation when phi < 0.0 at the sheath")
     .withDefault<bool>(false);
@@ -176,6 +187,15 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   // Set coefficients for Boussinesq solve
   phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy));
 
+  zonal_neumann = options["zonal_neumann"]
+      .doc("Do a second laplace solve for the zonal neumann?")
+      .withDefault<bool>(false);
+  
+  if (zonal_neumann) {
+    phiSolver_zonalneumann = Laplacian::create(&options["laplacian_zonalneumann"]);
+  }
+
+  
   if (phi_boundary_relax) {
     // Set the last update time to -1, so it will reset
     // the first time RHS function is called
@@ -276,131 +296,335 @@ void Vorticity::transform(Options& state) {
 
   Vort.applyParallelBoundary();
 
-  
-  // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
-  // is constant in Z. This is for efficiency, to reduce the number of conversions.
-  // Note: For now the boundary values are all at the midpoint,
-  //       and only phi is considered, not phi + Pi which is handled in Boussinesq solves
-  Pi_hat = 0.0; // Contribution from ion pressure, weighted by atomic mass / charge
-  if (diamagnetic_polarisation) {
-    // Diamagnetic term in vorticity. Note this is weighted by the mass
-    // This includes all species, including electrons
-    Options& allspecies = state["species"];
-    for (auto& kv : allspecies.getChildren()) {
-      Options& species = allspecies[kv.first]; // Note: need non-const
+  auto coord = mesh->getCoordinates();
 
-      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
-            and species.isSet("AA"))) {
-        continue; // No pressure, charge or mass -> no polarisation current
+
+  Field3D phi_plus_pi = 0.0;
+    
+  if (boussinesq) {
+  
+    phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy));
+    phiSolver->setCoefA(0.0);
+    // Set the boundary of phi. Both 2D and 3D fields are kept, though the 3D field
+    // is constant in Z. This is for efficiency, to reduce the number of conversions.
+    // Note: For now the boundary values are all at the midpoint,
+    //       and only phi is considered, not phi + Pi which is handled in Boussinesq solves
+    Pi_hat = 0.0; // Contribution from ion pressure, weighted by atomic mass / charge
+    if (diamagnetic_polarisation) {
+      // Diamagnetic term in vorticity. Note this is weighted by the mass
+      // This includes all species, including electrons
+      Options& allspecies = state["species"];
+      for (auto& kv : allspecies.getChildren()) {
+	Options& species = allspecies[kv.first]; // Note: need non-const
+
+	if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
+	      and species.isSet("AA"))) {
+	  continue; // No pressure, charge or mass -> no polarisation current
+	}
+
+	const auto charge = get<BoutReal>(species["charge"]);
+	if (fabs(charge) < 1e-5) {
+	  // No charge
+	  continue;
+	}
+
+	// Don't need sheath boundary
+	const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+	const auto AA = get<BoutReal>(species["AA"]);
+
+	Pi_hat += P * (AA / average_atomic_mass / charge);
+      }
+    }
+
+    Pi_hat.applyBoundary("neumann");
+
+    if (phi_boundary_relax) {
+      // Update the boundary regions by relaxing towards zero gradient
+      // on a given timescale.
+
+      BoutReal time = get<BoutReal>(state["time"]);
+
+      if (phi_boundary_last_update < 0.0) {
+	// First time this has been called.
+	phi_boundary_last_update = time;
+
+      } else if (time > phi_boundary_last_update) {
+	// Only update if time has advanced
+	// Uses an exponential decay of the weighting of the value in the boundary
+	// so that the solution is well behaved for arbitrary steps
+	BoutReal weight = exp(-(time - phi_boundary_last_update) / phi_boundary_timescale);
+	phi_boundary_last_update = time;
+
+	if (mesh->firstX()) {
+	  BoutReal phivalue = 0.0;
+	  if (phi_core_averagey) {
+	    BoutReal philocal = 0.0;
+	    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	      for (int k = 0; k < mesh->LocalNz; k++) {
+		philocal += phi(mesh->xstart, j, k);
+	      }
+	    }
+	    MPI_Comm comm_inner = mesh->getYcomm(0);
+	    int np;
+	    MPI_Comm_size(comm_inner, &np);
+	    MPI_Allreduce(&philocal,
+			  &phivalue,
+			  1, MPI_DOUBLE,
+			  MPI_SUM, comm_inner);
+	    phivalue /= (np * mesh->LocalNz * mesh->LocalNy);
+	  }
+
+	  for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	    if (!phi_core_averagey) {
+	      phivalue = 0.0; // Calculate phi boundary for each Y index separately
+	      for (int k = 0; k < mesh->LocalNz; k++) {
+		phivalue += phi(mesh->xstart, j, k);
+	      }
+	      phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
+	    }
+
+	    // Old value of phi at boundary
+	    BoutReal oldvalue =
+              0.5 * (phi(mesh->xstart - 1, j, 0) + phi(mesh->xstart, j, 0));
+
+	    // New value of phi at boundary, relaxing towards phivalue
+	    BoutReal newvalue = weight * oldvalue + (1. - weight) * phivalue;
+
+	    // Set phi at the boundary to this value
+	    for (int k = 0; k < mesh->LocalNz; k++) {
+	      phi(mesh->xstart - 1, j, k) = 2. * newvalue - phi(mesh->xstart, j, k);
+
+	      // Note: This seems to make a difference, but don't know why.
+	      // Without this, get convergence failures with no apparent instability
+	      // (all fields apparently smooth, well behaved)
+	      phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
+	    }
+	  }
+	}
+
+	if (mesh->lastX()) {
+	  for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	    BoutReal phivalue = 0.0;
+	    for (int k = 0; k < mesh->LocalNz; k++) {
+	      phivalue += phi(mesh->xend, j, k);
+	    }
+	    phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
+
+	    // Old value of phi at boundary
+	    BoutReal oldvalue = 0.5 * (phi(mesh->xend + 1, j, 0) + phi(mesh->xend, j, 0));
+
+	    // New value of phi at boundary, relaxing towards phivalue
+	    BoutReal newvalue = weight * oldvalue + (1. - weight) * phivalue;
+
+	    // Set phi at the boundary to this value
+	    for (int k = 0; k < mesh->LocalNz; k++) {
+	      phi(mesh->xend + 1, j, k) = 2. * newvalue - phi(mesh->xend, j, k);
+
+	      // Note: This seems to make a difference, but don't know why.
+	      // Without this, get convergence failures with no apparent instability
+	      // (all fields apparently smooth, well behaved)
+	      phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+	    }
+	  }
+	}
+      }
+    } else {
+      // phi_boundary_relax = false
+      //
+      // Set boundary from temperature, to be consistent with j=0 at sheath
+
+      // Sheath multiplier Te -> phi (2.84522 for Deuterium)
+      BoutReal sheathmult = 0.0;
+      if (sheath_boundary) {
+	BoutReal Me_Mp = get<BoutReal>(state["species"]["e"]["AA"]);
+	sheathmult = log(0.5 * sqrt(1. / (Me_Mp * PI)));
       }
 
+      Field3D Te; // Electron temperature, use for outer boundary conditions
+      if (state["species"]["e"].isSet("temperature")) {
+	// Electron temperature set
+	Te = GET_NOBOUNDARY(Field3D, state["species"]["e"]["temperature"]);
+      } else {
+	Te = 0.0;
+      }
+
+      // Sheath multiplier Te -> phi (2.84522 for Deuterium if Ti = 0)
+      if ( mesh->firstX() && !mesh->isFci()) {
+	for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	  BoutReal teavg = 0.0; // Average Te in Z
+
+	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    teavg += Te(mesh->xstart, j, k);
+	  }
+	  teavg /= mesh->LocalNz;
+	  BoutReal phivalue = sheathmult * teavg;
+	
+	  // Set midpoint (boundary) value
+	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    BoutReal phivalue = sheathmult * teavg;
+	    phi(mesh->xstart - 1, j, k) = 2. * phivalue - phi(mesh->xstart, j, k);
+
+	    // Note: This seems to make a difference, but don't know why.
+	    // Without this, get convergence failures with no apparent instability
+	    // (all fields apparently smooth, well behaved)
+	    phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
+	  }
+	}
+      }
+
+      if ( mesh->lastX()) {
+	for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	  // Set midpoint (boundary) value
+	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    BoutReal phivalue = sheathmult * 0.5 * (Te(mesh->xend, j, k) + Te(mesh->xend+1, j, k));
+	    phi(mesh->xend + 1, j, k) = 2. * phivalue - phi(mesh->xend, j, k);
+
+	    // Note: This seems to make a difference, but don't know why.
+	    // Without this, get convergence failures with no apparent instability
+	    // (all fields apparently smooth, well behaved)
+	    phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+	  }
+	}
+      }
+    }
+    phi.name = "phi";
+
+    // Update boundary conditions. Two issues:
+    // 1) Solving here for phi + Pi, and then subtracting Pi from the result
+    //    The boundary values should therefore include Pi
+    // 2) The INVERT_SET flag takes the value in the guard (boundary) cell
+    //    and sets the boundary between cells to this value.
+    //    This shift by 1/2 grid cell is important.
+
+    phi_plus_pi = phi + Pi_hat;
+
+    if ( mesh->firstX() ) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	for (int k = 0; k < mesh->LocalNz; k++) {
+	  // Average phi + Pi at the boundary, and set the boundary cell
+	  // to this value. The phi solver will then put the value back
+	  // onto the cell mid-point
+	  phi_plus_pi(mesh->xstart - 1, j, k) =
+            0.5 * (phi_plus_pi(mesh->xstart - 1, j, k) + phi_plus_pi(mesh->xstart, j, k));
+	  phi_plus_pi(mesh->xstart - 2, j, k) = phi_plus_pi(mesh->xstart - 1, j, k);
+	}
+      }
+    }
+
+    if ( mesh->lastX()) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	for (int k = 0; k < mesh->LocalNz; k++) {
+	  phi_plus_pi(mesh->xend + 1, j, k) =
+            0.5 * (phi_plus_pi(mesh->xend + 1, j, k) + phi_plus_pi(mesh->xend, j, k));
+	  phi_plus_pi(mesh->xend + 2, j, k) = phi_plus_pi(mesh->xend + 1, j, k);
+	}
+      }
+    }
+
+    // Calculate potential
+    if (split_n0) {
+      ////////////////////////////////////////////
+      // Split into axisymmetric and non-axisymmetric components
+      Field2D Vort2D = DC(Vort); // n=0 component
+      Field2D phi_plus_pi_2d = DC(phi_plus_pi);
+      phi_plus_pi -= phi_plus_pi_2d;
+
+      phi_plus_pi_2d = laplacexy->solve(Vort2D, phi_plus_pi_2d);
+
+      // Solve non-axisymmetric part using X-Z solver
+      phi = phi_plus_pi_2d
+	+ phiSolver->solve((Vort - Vort2D) * (Bsq / average_atomic_mass), phi_plus_pi)
+	- Pi_hat;
+
+    } else {
+      const auto tosolve = Vort * (Bsq / average_atomic_mass);
+      checkData(tosolve);
+      checkData(phi_plus_pi);
+      try {
+	phi = phiSolver->solve(tosolve, phi_plus_pi) - Pi_hat;
+      } catch (const BoutException& e) {
+	Options debug;
+	debug["tosolve"] = tosolve;
+	debug["guess"] = phi_plus_pi;
+	debug["Vort"] = Vort;
+	debug["Bsq"] = Bsq;
+	debug["Pi_hat"] = Pi_hat;
+	mesh->outputVars(debug);
+	const std::string outname =
+	  fmt::format("{}/BOUT.debug_vorticity.{}.nc",
+		      Options::root()["datadir"].withDefault<std::string>("data"),
+		      BoutComm::rank());
+
+	bout::OptionsIO::create(outname)->write(debug);
+	MPI_Barrier(BoutComm::get());
+	throw e;
+      }
+    }
+
+    if (zonal_neumann) {
+      Field2D avg_phi = DC(phi);
+      if ( mesh->firstX() ) {
+	for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    phi_plus_pi(mesh->xstart - 1, j, k) = 0.5 * ( avg_phi(mesh->xstart - 1 ,j) + avg_phi(mesh->xstart ,j) ) +
+	      0.5 * (Pi_hat(mesh->xstart - 1, j, k) + Pi_hat(mesh->xstart, j, k));
+	    phi_plus_pi(mesh->xstart - 2, j, k) = phi_plus_pi(mesh->xstart - 1, j, k);
+	  }
+	}
+      }
+      phiSolver_zonalneumann->setCoefC(average_atomic_mass / SQ(coord->Bxy));
+      const auto tosolve = Vort * (Bsq / average_atomic_mass);
+      phi = phiSolver_zonalneumann->solve(tosolve, phi_plus_pi) - Pi_hat;
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  } else { // Non-boussinesq part
+
+    //////////////////////////////////////////////////////////////////
+
+    Field3D AN_Bsq = 0.0;
+    Field3D RHS = 0.0;
+    Options& allspecies = state["species"];
+    for (auto& kv : allspecies.getChildren()) {
+      Options& species = allspecies[kv.first]; // Note: need non-const                                                                                                                                   
+      
+      if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
+	    and species.isSet("AA") and IS_SET_NOBOUNDARY(species["density"]) )) {
+	continue; // No pressure, charge or mass -> no polarisation current                                                                                                                              
+      }
+      
       const auto charge = get<BoutReal>(species["charge"]);
       if (fabs(charge) < 1e-5) {
-        // No charge
+	// No charge                                                                                                                                                                                     
+	continue;
+      }
+
+      if (charge < 0.0) {
+        // No electrons                                                                                                                                                                                   
         continue;
       }
 
-      // Don't need sheath boundary
+      // Don't need sheath boundary                                                                                                                                                                      
       const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+      const auto N = GET_NOBOUNDARY(Field3D, species["density"]);
       const auto AA = get<BoutReal>(species["AA"]);
+	
+      AN_Bsq += AA*N / Bsq;
 
-      Pi_hat += P * (AA / average_atomic_mass / charge);
+      Field3D dummy1;
+      Field3D dummy2;
+      RHS += (*dagp)(AA / Bsq / charge, P, dummy1, dummy2, false);
+
     }
-  }
+    RHS.applyBoundary("free_o2");
+    mesh->communicate(RHS);
+    
+    //////////////////////////////////////////////////////////////////
 
-  Pi_hat.applyBoundary("neumann");
-
-  if (phi_boundary_relax) {
-    // Update the boundary regions by relaxing towards zero gradient
-    // on a given timescale.
-
-    BoutReal time = get<BoutReal>(state["time"]);
-
-    if (phi_boundary_last_update < 0.0) {
-      // First time this has been called.
-      phi_boundary_last_update = time;
-
-    } else if (time > phi_boundary_last_update) {
-      // Only update if time has advanced
-      // Uses an exponential decay of the weighting of the value in the boundary
-      // so that the solution is well behaved for arbitrary steps
-      BoutReal weight = exp(-(time - phi_boundary_last_update) / phi_boundary_timescale);
-      phi_boundary_last_update = time;
-
-      if (mesh->firstX()) {
-        BoutReal phivalue = 0.0;
-        if (phi_core_averagey) {
-          BoutReal philocal = 0.0;
-          for (int j = mesh->ystart; j <= mesh->yend; j++) {
-            for (int k = 0; k < mesh->LocalNz; k++) {
-              philocal += phi(mesh->xstart, j, k);
-            }
-          }
-          MPI_Comm comm_inner = mesh->getYcomm(0);
-          int np;
-          MPI_Comm_size(comm_inner, &np);
-          MPI_Allreduce(&philocal,
-                        &phivalue,
-                        1, MPI_DOUBLE,
-                        MPI_SUM, comm_inner);
-          phivalue /= (np * mesh->LocalNz * mesh->LocalNy);
-        }
-
-        for (int j = mesh->ystart; j <= mesh->yend; j++) {
-          if (!phi_core_averagey) {
-            phivalue = 0.0; // Calculate phi boundary for each Y index separately
-            for (int k = 0; k < mesh->LocalNz; k++) {
-              phivalue += phi(mesh->xstart, j, k);
-            }
-            phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
-          }
-
-          // Old value of phi at boundary
-          BoutReal oldvalue =
-              0.5 * (phi(mesh->xstart - 1, j, 0) + phi(mesh->xstart, j, 0));
-
-          // New value of phi at boundary, relaxing towards phivalue
-          BoutReal newvalue = weight * oldvalue + (1. - weight) * phivalue;
-
-          // Set phi at the boundary to this value
-          for (int k = 0; k < mesh->LocalNz; k++) {
-            phi(mesh->xstart - 1, j, k) = 2. * newvalue - phi(mesh->xstart, j, k);
-
-            // Note: This seems to make a difference, but don't know why.
-            // Without this, get convergence failures with no apparent instability
-            // (all fields apparently smooth, well behaved)
-            phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
-          }
-        }
-      }
-
-      if (mesh->lastX()) {
-        for (int j = mesh->ystart; j <= mesh->yend; j++) {
-          BoutReal phivalue = 0.0;
-          for (int k = 0; k < mesh->LocalNz; k++) {
-            phivalue += phi(mesh->xend, j, k);
-          }
-          phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
-
-          // Old value of phi at boundary
-          BoutReal oldvalue = 0.5 * (phi(mesh->xend + 1, j, 0) + phi(mesh->xend, j, 0));
-
-          // New value of phi at boundary, relaxing towards phivalue
-          BoutReal newvalue = weight * oldvalue + (1. - weight) * phivalue;
-
-          // Set phi at the boundary to this value
-          for (int k = 0; k < mesh->LocalNz; k++) {
-            phi(mesh->xend + 1, j, k) = 2. * newvalue - phi(mesh->xend, j, k);
-
-            // Note: This seems to make a difference, but don't know why.
-            // Without this, get convergence failures with no apparent instability
-            // (all fields apparently smooth, well behaved)
-            phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
-          }
-        }
-      }
-    }
-  } else {
+    
     // phi_boundary_relax = false
     //
     // Set boundary from temperature, to be consistent with j=0 at sheath
@@ -421,7 +645,7 @@ void Vorticity::transform(Options& state) {
     }
 
     // Sheath multiplier Te -> phi (2.84522 for Deuterium if Ti = 0)
-    if ( mesh->firstX()) {
+    if ( mesh->firstX() && !mesh->isFci()) {
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
         BoutReal teavg = 0.0; // Average Te in Z
 
@@ -445,99 +669,79 @@ void Vorticity::transform(Options& state) {
 
     if ( mesh->lastX()) {
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal teavg = 0.0; // Average Te in Z
-
-	for (int k = 0; k < mesh->LocalNz; k++) {
-	  teavg += Te(mesh->xend, j, k);
-	}
-	teavg /= mesh->LocalNz;
-	BoutReal phivalue = sheathmult * teavg;
         // Set midpoint (boundary) value
         for (int k = 0; k < mesh->LocalNz; k++) {
+	  BoutReal phivalue = sheathmult * 0.5 * (Te(mesh->xend, j, k) + Te(mesh->xend+1, j, k));
           phi(mesh->xend + 1, j, k) = 2. * phivalue - phi(mesh->xend, j, k);
 
           // Note: This seems to make a difference, but don't know why.
           // Without this, get convergence failures with no apparent instability
           // (all fields apparently smooth, well behaved)
           phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+
         }
       }
     }
-  }
-  phi.name = "phi";
 
-  // Update boundary conditions. Two issues:
-  // 1) Solving here for phi + Pi, and then subtracting Pi from the result
-  //    The boundary values should therefore include Pi
-  // 2) The INVERT_SET flag takes the value in the guard (boundary) cell
-  //    and sets the boundary between cells to this value.
-  //    This shift by 1/2 grid cell is important.
+    phi.name = "phi";
 
-  Field3D phi_plus_pi = phi + Pi_hat;
+    phiSolver->setCoefC(AN_Bsq);
 
-  if ( mesh->firstX() ) {
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      for (int k = 0; k < mesh->LocalNz; k++) {
-        // Average phi + Pi at the boundary, and set the boundary cell
-        // to this value. The phi solver will then put the value back
-        // onto the cell mid-point
-        phi_plus_pi(mesh->xstart - 1, j, k) =
-            0.5 * (phi_plus_pi(mesh->xstart - 1, j, k) + phi_plus_pi(mesh->xstart, j, k));
-	phi_plus_pi(mesh->xstart - 2, j, k) = phi_plus_pi(mesh->xstart - 1, j, k);
+    Field3D tosolve = (Vort-RHS)/AN_Bsq;
+    
+    phi = phiSolver->solve(tosolve, phi) ;
+
+
+    if (zonal_neumann) {
+      phiSolver_zonalneumann->setCoefC(AN_Bsq);
+      Field2D avg_phi = DC(phi);
+      if ( mesh->firstX() ) {
+        for (int j = mesh->ystart; j <= mesh->yend; j++) {
+          for (int k = 0; k < mesh->LocalNz; k++) {
+            phi(mesh->xstart - 1, j, k) = 0.5 * ( avg_phi(mesh->xstart - 1 ,j) + avg_phi(mesh->xstart ,j) ) ;
+	    phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
+          }
+        }
+      }
+
+      if ( mesh->lastX()) {
+	for (int j = mesh->ystart; j <= mesh->yend; j++) {
+        
+	  for (int k = 0; k < mesh->LocalNz; k++) {
+	    phi(mesh->xend + 1, j, k) = 0.5 * (phi(mesh->xend + 1, j, k) + phi(mesh->xend, j, k));	    
+	    phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+	  }
+	}
+      }
+
+      
+      
+      phi = phiSolver_zonalneumann->solve(tosolve, phi);
+    }
+
+
+    
+  } // END non-boussinesq
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  
+
+  if (zonal_neumann && boussinesq) {
+    Field2D avg_phi = DC(phi);
+    if ( mesh->firstX() ) {
+      for (int j = mesh->ystart; j <= mesh->yend; j++) {
+	for (int k = 0; k < mesh->LocalNz; k++) {
+	  phi_plus_pi(mesh->xstart - 1, j, k) = 0.5 * ( avg_phi(mesh->xstart - 1 ,j) + avg_phi(mesh->xstart ,j) ) +
+	    0.5 * (Pi_hat(mesh->xstart - 1, j, k) + Pi_hat(mesh->xstart, j, k));
+	  phi_plus_pi(mesh->xstart - 2, j, k) = phi_plus_pi(mesh->xstart - 1, j, k);
+	}
       }
     }
-  }
-
-  if ( mesh->lastX()) {
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      for (int k = 0; k < mesh->LocalNz; k++) {
-        phi_plus_pi(mesh->xend + 1, j, k) =
-            0.5 * (phi_plus_pi(mesh->xend + 1, j, k) + phi_plus_pi(mesh->xend, j, k));
-	phi_plus_pi(mesh->xend + 2, j, k) = phi_plus_pi(mesh->xend + 1, j, k);
-      }
-    }
-  }
-
-  // Calculate potential
-  if (split_n0) {
-    ////////////////////////////////////////////
-    // Split into axisymmetric and non-axisymmetric components
-    Field2D Vort2D = DC(Vort); // n=0 component
-    Field2D phi_plus_pi_2d = DC(phi_plus_pi);
-    phi_plus_pi -= phi_plus_pi_2d;
-
-    phi_plus_pi_2d = laplacexy->solve(Vort2D, phi_plus_pi_2d);
-
-    // Solve non-axisymmetric part using X-Z solver
-    phi = phi_plus_pi_2d
-          + phiSolver->solve((Vort - Vort2D) * (Bsq / average_atomic_mass), phi_plus_pi)
-          - Pi_hat;
-
-  } else {
     const auto tosolve = Vort * (Bsq / average_atomic_mass);
-    checkData(tosolve);
-    checkData(phi_plus_pi);
-    try {
-      phi = phiSolver->solve(tosolve, phi_plus_pi) - Pi_hat;
-    } catch (const BoutException& e) {
-      Options debug;
-      debug["tosolve"] = tosolve;
-      debug["guess"] = phi_plus_pi;
-      debug["Vort"] = Vort;
-      debug["Bsq"] = Bsq;
-      debug["Pi_hat"] = Pi_hat;
-      mesh->outputVars(debug);
-      const std::string outname =
-        fmt::format("{}/BOUT.debug_vorticity.{}.nc",
-                    Options::root()["datadir"].withDefault<std::string>("data"),
-                    BoutComm::rank());
-
-      bout::OptionsIO::create(outname)->write(debug);
-      MPI_Barrier(BoutComm::get());
-      throw e;
-    }
+    phi = phiSolver_zonalneumann->solve(tosolve, phi_plus_pi) - Pi_hat; 
   }
-
+  
   // Ensure that potential is set in the communication guard cells
   mesh->communicate(phi);
 
@@ -774,26 +978,43 @@ void Vorticity::finally(const Options& state) {
 
     const Field3D N = get<Field3D>(species["density"]);
     const Field3D NV = get<Field3D>(species["momentum"]);
+    const Field3D V = get<Field3D>(species["velocity"]);
     const BoutReal A = get<BoutReal>(species["AA"]);
 
-    // Note: Using NV rather than N*V so that the cell boundary flux is correct
-    const Field3D jpar = (Z / A) * NV;
-    ddt(Vort) += Div_par(jpar);
+    Field3D fastest_wave;
+    if (state.isSet("fastest_wave")) {
+      fastest_wave = get<Field3D>(state["fastest_wave"]);
+    } else {
+      Field3D T = get<Field3D>(species["temperature"]);
+      BoutReal AA = get<BoutReal>(species["AA"]);
+      fastest_wave = sqrt(T / AA);
+    }
 
-    if (state["fields"].isSet("Apar_flutter")) {
+    Field3D flow_ylow = 0.0;
+    ddt(Vort) += Z * FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow,  false,
+						   false, true);
+    
+    if (state["fields"].isSet("Apar_flutter") && magnetic_flutter) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
 
       // Div_par(jpar) = B * Grad_par(jpar / B)
       // Using the approximation for small delta-B/B
       // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
-      ddt(Vort) += coord->Bxy * bracket(jpar / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(Vort) += coord->Bxy * bracket((Z/A)*NV / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA)*bracket_factor;
     }
   }
 
   // Viscosity
   if (has_viscosity) {
-    ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
+    if (Vort.isFci()) {
+      Field3D dummy1;
+      Field3D dummy2;
+      
+      ddt(Vort) += (*dagp)(viscosity, Vort, dummy1, dummy2, false);
+    } else {
+      ddt(Vort) += Div_a_Grad_perp(viscosity, Vort);
+    }
   }
 
   Field3D dummy;
@@ -812,7 +1033,8 @@ void Vorticity::finally(const Options& state) {
     // Adds dissipation term like in other equations, but depending on gradient of
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-    ddt(Vort) -= FV::Div_par(-phi, 0.0, sound_speed);
+    Field3D dummy;
+    ddt(Vort) -= phi_diss_factor * FV::Div_par_mod(-phi, 0.0, sound_speed, dummy, true, false);
   }
 
   if (hyper > 0) {

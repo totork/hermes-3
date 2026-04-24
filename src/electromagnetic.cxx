@@ -38,6 +38,10 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
     .doc("Extrapolate gradient of Apar into all radial boundaries?")
     .withDefault<bool>(false);
 
+  use_normdensity = options["use_normdensity"]
+    .doc("Use the normalized density instead of the full density in the Apar equation?")
+    .withDefault<bool>(false);
+  
   // Give Apar an initial value because we solve Apar by iteration
   // starting from the previous solution
   // Note: On restart the value is restored (if available) in restartVars
@@ -73,6 +77,11 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
     .doc("Output additional diagnostics?")
     .withDefault<bool>(false);
 
+  zeroes = 0.0;
+  zeroes.applyBoundary("neumann");
+  bout::globals::mesh->communicate(zeroes);
+  zeroes.applyParallelBoundary("parallel_neumann_o1");
+  
   magnetic_flutter = options["magnetic_flutter"]
     .doc("Set magnetic flutter terms (Apar_flutter)?")
     .withDefault<bool>(false);
@@ -127,15 +136,21 @@ void Electromagnetic::transform(Options &state) {
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Coefficient in front of A_||
-    alpha_em += floor(N, 1e-5) * (SQ(Z) / A);
 
+    if (use_normdensity) {
+      alpha_em += (SQ(Z) / A); 
+    } else {
+      alpha_em += floor(N, 1e-5) * (SQ(Z) / A);
+    }
+      
     // Right hand side
     Ajpar += mom * (Z / A);
   }
 
   // Invert Helmholtz equation for Apar
   aparSolver->setCoefA((-beta_em) * alpha_em);
-
+  aparSolver->setCoefC(1.0);
+  //aparSolver->setCoefA(0.0);
   if (const_gradient) {
     // Set gradient boundary condition from gradient inside boundary
     Field3D rhs = (-beta_em) * Ajpar;
@@ -173,7 +188,7 @@ void Electromagnetic::transform(Options &state) {
     // Use previous value of Apar as initial guess
     Apar = aparSolver->solve(rhs, Apar);
   } else {
-    Apar = aparSolver->solve((-beta_em) * Ajpar, Apar);
+    Apar = aparSolver->solve((-beta_em) * Ajpar, zeroes);
   }
 
   // Save in the state
@@ -194,17 +209,24 @@ void Electromagnetic::transform(Options &state) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
     Field3D nv = getNonFinal<Field3D>(species["momentum"]);
-    nv -= Z * N * Apar;
+    if (use_normdensity) {
+      nv -= Z * Apar;
+    } else {
+      nv -= Z * N * Apar;
+    }
     // Note: velocity is momentum / (A * N)
     Field3D v = getNonFinal<Field3D>(species["velocity"]);
-    v -= (Z / A) * N * Apar / floor(N, 1e-5);
-    // Need to update the guard cells
+    if (use_normdensity) {
+      v -= (Z / A) * Apar / floor(N, 1e-5);
+    } else {
+      v -= (Z / A) * N * Apar / floor(N, 1e-5);
+    }  
+
     nv.applyBoundary("neumann");
     v.applyBoundary("neumann");
     bout::globals::mesh->communicate(nv, v);
     v.applyParallelBoundary("parallel_neumann_o1");
     nv.applyParallelBoundary("parallel_neumann_o1");
-	
     
     set(species["momentum"], nv);
     set(species["velocity"], v);
@@ -212,32 +234,35 @@ void Electromagnetic::transform(Options &state) {
 
   if (magnetic_flutter) {
     // Magnetic flutter terms
-    Apar_flutter = Apar - DC(Apar);
-
+    if (bout::globals::mesh->isFci()){
+      Apar_flutter = Apar;
+      set(state["fields"]["Apar_flutter"], Apar);
+    } else {
+      Apar_flutter = Apar - DC(Apar);
     // Ensure that guard cells are communicated
-    Apar.getMesh()->communicate(Apar_flutter);
+      Apar.getMesh()->communicate(Apar_flutter);
+      set(state["fields"]["Apar_flutter"], Apar_flutter);
 
-    set(state["fields"]["Apar_flutter"], Apar_flutter);
-
-#if 0
-    // Create a vector A from covariant components
-    // (A^x, A^y, A^z)
-    // Note: b = e_y / (JB)
+      #if 0
+    // Create a vector A from covariant components                                                                                                                                                         
+    // (A^x, A^y, A^z)                                                                                                                                                                                     
+    // Note: b = e_y / (JB)                                                                                                                                                                                
     const auto* coords = Apar.getCoordinates();
     Vector3D A;
     A.covariant = true;
     A.x = A.z = 0.0;
     A.y = Apar_flutter * (coords->J * coords->Bxy);
 
-    // Perturbed magnetic field vector
-    // Note: Contravariant components (dB_x, dB_y, dB_z)
+    // Perturbed magnetic field vector                                                                                                                                                                     
+    // Note: Contravariant components (dB_x, dB_y, dB_z)                                                                                                                                                   
     Vector3D delta_B = Curl(A);
 
-    // Set components of the perturbed unit vector
-    // Note: Options can't (yet) contain vectors
+    // Set components of the perturbed unit vector                                                                                                                                                         
+    // Note: Options can't (yet) contain vectors                                                                                                                                                           
     set(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy);
     set(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy);
 #endif
+    }
   }
 }
 

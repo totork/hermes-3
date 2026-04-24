@@ -105,6 +105,11 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   disable_ddt = nv_options["disable_ddt"]
     .withDefault<bool>(false);
 
+  magnetic_flutter=
+      nv_options["magnetic_flutter"]
+          .doc("Use flutter terms??")
+          .withDefault<bool>(true);
+  
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -222,7 +227,7 @@ void EvolveMomentum::finally(const Options &state) {
         }
         ddt(NV) += Z * Apar * dndt;
       }
-      if (state["fields"].isSet("Apar_flutter")) {
+      if (state["fields"].isSet("Apar_flutter") and magnetic_flutter) {
         // Magnetic flutter term
         const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
 
@@ -254,14 +259,14 @@ void EvolveMomentum::finally(const Options &state) {
     ddt(NV) -= Grad_par(P);
   }
 
-  if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+  if (state.isSection("fields") and state["fields"].isSet("Apar_flutter") and magnetic_flutter) {
     // Magnetic flutter term
     const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
     ddt(NV) -= Div_n_g_bxGrad_f_B_XZ(NV, V, -Apar_flutter);
 
     if (species.isSet("pressure")) {
       Field3D P = get<Field3D>(species["pressure"]);
-      ddt(NV) -= bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(NV) -= bracket(P, Apar_flutter, BRACKET_ARAKAWA) * bracket_factor;
     }
   }
 

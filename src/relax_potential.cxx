@@ -161,6 +161,20 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   ones.applyBoundary("neumann");
   mesh->communicate(ones);
   ones.applyParallelBoundary("parallel_neumann_o1");
+
+  zeroes = 0.0;
+  zeroes.applyBoundary("neumann");
+  mesh->communicate(zeroes);
+  zeroes.applyParallelBoundary("parallel_neumann_o1");
+  
+  core_dissipation = options["core_dissipation"]
+                   .doc("Use core dissipation of vorticity? Grid field required!")
+                   .withDefault<bool>(false);
+
+  if (core_dissipation || (vort_timedissipation > 0.0)) {
+    mesh->get(is_SOL, "is_SOL", 0.0);
+  }
+  
   
 }
 
@@ -366,8 +380,15 @@ void RelaxPotential::finally(const Options& state) {
   // Solve diffusion equation for potential
 
   if (vort_timedissipation > 0.0) {
-    ddt(Vort) -= vort_timedissipation * Vort;
+    ddt(Vort) -= (1.0 - is_SOL) * Vort / vort_timedissipation;
   } 
+
+  if (core_dissipation) {
+    Field3D sound_speed = get<Field3D>(state["sound_speed"]);
+    Field3D dummy;
+    ddt(Vort) -= (1.0 - is_SOL) * FV::Div_par_mod<hermes::Limiter>(Vort, zeroes, sound_speed, dummy);
+  }
+  
   
   if (boussinesq) {
 
@@ -397,8 +418,8 @@ void RelaxPotential::finally(const Options& state) {
     }
   } else {
     // Non-Boussinesq. Calculate mass density by summing over species
-    throw BoutException("Non_boussinesq not implemented");
     // Calculate vorticity from potential phi
+    Field3D flow_xlow_phi,flow_zlow_phi;
     Field3D phi_vort = 0.0;
     for (auto& kv : allspecies.getChildren()) {
       const Options& species = kv.second;
@@ -413,12 +434,12 @@ void RelaxPotential::finally(const Options& state) {
 
       const BoutReal Ai = get<BoutReal>(species["AA"]);
       const Field3D Ni = get<Field3D>(species["density"]);
-      phi_vort += Div_a_Grad_perp((Ai / Bsq) * Ni, phi);
+      phi_vort += (*dagp)((Ai / Bsq) * Ni, phi, flow_xlow_phi, flow_zlow_phi, false);
 
       if (diamagnetic_polarisation and species.isSet("pressure")) {
         // Calculate the diamagnetic flow contribution
         const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += Div_a_Grad_perp(Ai / Bsq, Pi);
+        phi_vort += (*dagp)(Ai / Bsq / Zi, Pi, flow_xlow_phi, flow_zlow_phi, false);
       }
     }
 

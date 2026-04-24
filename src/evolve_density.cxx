@@ -51,6 +51,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
+  
   pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
 
   
@@ -131,6 +132,11 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     .withDefault(source)
     / source_normalisation;
 
+  magnetic_flutter=
+      n_options["magnetic_flutter"]
+          .doc("Use flutter terms??")
+          .withDefault<bool>(true);
+  
   disable_ddt = n_options["disable_ddt"]
     .withDefault<bool>(false);
   
@@ -299,12 +305,13 @@ void EvolveDensity::finally(const Options& state) {
     flow_ylow = 0.0;
     ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, false, dissipative);
     
-    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter") and magnetic_flutter) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
       // Note: Using -Apar_flutter rather than reversing sign in front,
       //       so that upwinding is handled correctly
-      ddt(N) -= Div_n_g_bxGrad_f_B_XZ(N, V, -Apar_flutter);
+      auto* coord = N.getCoordinates();
+      ddt(N) -= coord->Bxy * bracket(N*V/coord->Bxy, Apar_flutter, BRACKET_ARAKAWA) * bracket_factor;
     }
   }
 

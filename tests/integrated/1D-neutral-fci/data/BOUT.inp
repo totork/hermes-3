@@ -12,8 +12,8 @@ type = fci
 
 [solver]
 mxstep = 10000
-rtol = 1e-5
-atol = 1e-9
+rtol = 1e-6
+atol = 1e-10
 mms = true  # Run with MMS sources and output diagnostics
 mms_initialise = true
 

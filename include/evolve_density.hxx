@@ -64,7 +64,7 @@ private:
   BoutReal AA;          ///< Atomic mass e.g. proton = 1
   
   Field3D N;            ///< Species density (normalised, evolving)
-
+  bool magnetic_flutter;
   bool bndry_flux;      ///< Allow flows through boundaries?
   bool exb_advection;   ///< Include ExB advection?
   bool poloidal_flows;  ///< Include ExB flow in Y direction?

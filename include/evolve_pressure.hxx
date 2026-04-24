@@ -84,6 +84,8 @@ private:
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
+  bool kappa_limit_grillix;
+  BoutReal kappa_limit_Lpar;
   bool disable_ddt;
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
   BoutReal T_lowsource;
@@ -103,7 +105,7 @@ private:
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
-
+  bool magnetic_flutter;
   BoutReal adapt_source;
   
   BoutReal hyper_z; ///< Hyper-diffusion
