@@ -570,46 +570,13 @@ void Vorticity::transform(Options& state) {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  } else { // Non_boussinesq part
-    Pi_hat = 0.0;
-    Options& allspecies = state["species"];
-    if (diamagnetic_polarisation) {
-      // Diamagnetic term in vorticity. Note this is weighted by the mass
-      // This includes all species, including electrons
-      for (auto& kv : allspecies.getChildren()) {
-	Options& species = allspecies[kv.first]; // Note: need non-const
-
-	if (!(IS_SET_NOBOUNDARY(species["pressure"]) and species.isSet("charge")
-	      and species.isSet("AA") and IS_SET_NOBOUNDARY(species["density"]) )) {
-	  continue; // No pressure, charge or mass -> no polarisation current
-	}
-
-	const auto charge = get<BoutReal>(species["charge"]);
-	if (fabs(charge) < 1e-5) {
-	  // No charge
-	  continue;
-	}
-
-	if (charge < 0.0) {
-	  continue;
-	}
-
-	// Don't need sheath boundary
-	const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-	const auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-	const auto AA = get<BoutReal>(species["AA"]);
-
-	Pi_hat += P / N;
-      }
-    } // END diamagnetic_polarisation
-
-    Pi_hat.applyBoundary("neumann");
+  } else { // Non-boussinesq part
 
     //////////////////////////////////////////////////////////////////
 
     Field3D AN_Bsq = 0.0;
     Field3D RHS = 0.0;
-
+    Options& allspecies = state["species"];
     for (auto& kv : allspecies.getChildren()) {
       Options& species = allspecies[kv.first]; // Note: need non-const                                                                                                                                   
       
@@ -638,9 +605,11 @@ void Vorticity::transform(Options& state) {
 
       Field3D dummy1;
       Field3D dummy2;
-      RHS += (*dagp)(AA*N*P / Bsq, 1.0 / N, dummy1, dummy2, false);
-    }
+      RHS += (*dagp)(AA / Bsq / charge, P, dummy1, dummy2, false);
 
+    }
+    RHS.applyBoundary("neumann");
+    mesh->communicate(RHS);
 
     
     //////////////////////////////////////////////////////////////////
@@ -711,35 +680,9 @@ void Vorticity::transform(Options& state) {
 
     phi.name = "phi";
 
-
-    phi_plus_pi = phi + Pi_hat;
-
-    if ( mesh->firstX() ) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-	for (int k = 0; k < mesh->LocalNz; k++) {
-	  // Average phi + Pi at the boundary, and set the boundary cell
-	  // to this value. The phi solver will then put the value back
-	  // onto the cell mid-point
-	  phi_plus_pi(mesh->xstart - 1, j, k) =
-            0.5 * (phi_plus_pi(mesh->xstart - 1, j, k) + phi_plus_pi(mesh->xstart, j, k));
-	  phi_plus_pi(mesh->xstart - 2, j, k) = phi_plus_pi(mesh->xstart - 1, j, k);
-	}
-      }
-    }
-
-    if ( mesh->lastX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-	for (int k = 0; k < mesh->LocalNz; k++) {
-	  phi_plus_pi(mesh->xend + 1, j, k) =
-            0.5 * (phi_plus_pi(mesh->xend + 1, j, k) + phi_plus_pi(mesh->xend, j, k));
-	  phi_plus_pi(mesh->xend + 2, j, k) = phi_plus_pi(mesh->xend + 1, j, k);
-	}
-      }
-    }
-
     phiSolver->setCoefC(AN_Bsq);
 
-    phi = phiSolver->solve((Vort-RHS)/AN_Bsq, phi_plus_pi) - Pi_hat;
+    phi = phiSolver->solve((Vort-RHS)/AN_Bsq, phi) ;
 
 
     
