@@ -19,7 +19,11 @@ NeutralParallelBoundary::NeutralParallelBoundary(std::string name, Options &allo
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
 
-  boundary_value = options["boundary_value"]
+  boundary_value_yup = options["boundary_value_yup"]
+           .doc("Boundary value for the neutral density")
+           .withDefault(-1.0) / Nnorm;
+
+  boundary_value_ydown = options["boundary_value_ydown"]
            .doc("Boundary value for the neutral density")
            .withDefault(-1.0) / Nnorm;
 
@@ -46,7 +50,12 @@ void NeutralParallelBoundary::transform(Options &state) {
     iter_regions([&](auto& region) {
       for (auto& pnt : region) {
 	const auto& i = pnt.ind();
-	pnt.dirichlet_o2(N, boundary_value);
+	if (pnt.dir > 0.0) {
+	  pnt.dirichlet_o2(N, boundary_value_yup);
+	} else {
+	  pnt.dirichlet_o2(N, boundary_value_ydown);
+	}
+
       }
     });
   

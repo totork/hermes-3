@@ -14,7 +14,8 @@ struct NeutralParallelBoundary : public Component {
   void transform(Options &state) override;
 
 private:
-  BoutReal boundary_value;
+  BoutReal boundary_value_yup;
+  BoutReal boundary_value_ydown;
   YBoundary yboundary;
 
   Field3D fromFieldAligned(const Field3D& f) {
