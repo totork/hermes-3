@@ -433,14 +433,11 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  if (evolve_momentum) {
-    if (!isMMS){
-      ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
-    } else {
-      ddt(Nn) = -Div_par(Nn * Vn);
-    }
+
+  if (!isMMS){
+    ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
   } else {
-    ddt(Nn) = 0.0;
+    ddt(Nn) = -Div_par(Nn * Vn);
   }
 
   
@@ -477,16 +474,14 @@ void NeutralMixed::finally(const Options& state) {
   if (evolve_pressure) {
     TRACE("Neutral pressure");
 
-    if (evolve_momentum) {
-      if (!isMMS) {
-	ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
-      } else {
-	ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
-      }
-      ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
+
+    if (!isMMS) {
+      ddt(Pn) = -(5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(Pn, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
     } else {
-      ddt(Pn) = 0.0;
+      ddt(Pn) = -(5.0 / 3.0) * Div_par(Pn * Vn);
     }
+    ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
+
   
     if (!Pn.isFci()) {                                                                     // Perpendicular advection
       ddt(Pn) += (5. / 3) * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
