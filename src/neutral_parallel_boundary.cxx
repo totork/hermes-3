@@ -51,9 +51,11 @@ void NeutralParallelBoundary::transform(Options &state) {
       for (auto& pnt : region) {
 	const auto& i = pnt.ind();
 	if (pnt.dir > 0.0) {
-	  pnt.dirichlet_o2(N, boundary_value_yup);
+	  //pnt.dirichlet_o2(N, boundary_value_yup);
+	  pnt.ynext(N) = 2.0 * boundary_value_yup - pnt.ythis(N);
 	} else {
-	  pnt.dirichlet_o2(N, boundary_value_ydown);
+	  //pnt.dirichlet_o2(N, boundary_value_ydown);
+	  pnt.ynext(N) = 2.0 * boundary_value_ydown - pnt.ythis(N);
 	}
 
       }
