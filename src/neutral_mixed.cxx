@@ -99,6 +99,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   }
 
   
+  boundary_value_yup = options["boundary_value_yup"]
+           .doc("Boundary value for the neutral density")
+           .withDefault(-1.0) / Nnorm;
+
+  boundary_value_ydown = options["boundary_value_ydown"]
+           .doc("Boundary value for the neutral density")
+           .withDefault(-1.0) / Nnorm;
   
   
   
@@ -319,6 +326,31 @@ void NeutralMixed::transform(Options& state) {
     NVn.applyParallelBoundary("parallel_neumann_o1");
   }
 
+  if (boundary_value_ydown > 0.0) {
+    iter_regions([&](auto& region) {
+      for (auto& pnt : region) {
+	const auto& i = pnt.ind();
+	if (pnt.dir < 0.0) {        
+	  pnt.ynext(Nn) = 2.0 * boundary_value_ydown - pnt.ythis(Nn);
+	}	
+      }
+    });    
+  }
+
+  if (boundary_value_yup > 0.0) {
+    iter_regions([&](auto& region) {
+      for (auto& pnt : region) {
+        const auto& i = pnt.ind();
+        if (pnt.dir > 0.0) {
+          pnt.ynext(Nn) = 2.0 * boundary_value_yup - pnt.ythis(Nn);
+        }
+      }
+    });
+  }
+
+
+
+  
   Nh_up = 0.0;
   Nh_down = 0.0;
   

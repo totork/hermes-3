@@ -37,6 +37,13 @@ struct NeutralMixed : public Component {
 private:
   std::string name;  ///< Species name
   YBoundary yboundary;
+
+  template <class F>
+  void iter_regions(const F& f) {
+    yboundary.iter_regions(f);
+  }
+
+  
   std::shared_ptr<FCI::dagp_fv> dagp;
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
@@ -57,6 +64,9 @@ private:
   BoutReal flux_limit; ///< Diffusive flux limit
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
 
+  BoutReal boundary_value_yup;
+  BoutReal boundary_value_ydown;
+  
   bool parallel_dirichlet;
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
