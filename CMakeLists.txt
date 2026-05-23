@@ -311,6 +311,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-neutral-full-density-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-full-momentum-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(3D-Axial-circular-conduction-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-axial-circular-fci
