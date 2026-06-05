@@ -68,6 +68,7 @@ set(HERMES_SOURCES
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
+    src/evolve_current.cxx
     src/isothermal.cxx
     src/adhoc_potential.cxx
     src/quasineutral.cxx
@@ -138,6 +139,7 @@ set(HERMES_SOURCES
     include/evolve_energy.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
+    include/evolve_current.hxx
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx
     include/fixed_velocity.hxx
