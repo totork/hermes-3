@@ -125,12 +125,13 @@ void AnomalousDiffusion3D::transform(Options& state) {
       density_source = Div_a_Grad_perp_curv(anomalous_D, N);
       add(species["density_source"], density_source);
       auto AA = get<BoutReal>(species["AA"]);
-
+      
       add(species["momentum_source"],
           Div_a_Grad_perp_curv(AA * V * anomalous_D, N));
 
-      add(species["energy_source"],
-          Div_a_Grad_perp_curv((3. / 2) * T * anomalous_D, N));
+      TE_pdiffusion = Div_a_Grad_perp_curv((3. / 2) * T * anomalous_D, N);
+      
+      add(species["energy_source"],TE_pdiffusion);
       
     } else {
     
@@ -147,8 +148,8 @@ void AnomalousDiffusion3D::transform(Options& state) {
       add(species["momentum_flow_xlow"], flow_xlow);
       add(species["momentum_flow_zlow"], flow_zlow);
 
-      add(species["energy_source"],
-	  (*dagp)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_zlow, upwind));
+      TE_pdiffusion = (*dagp)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_zlow, upwind);
+      add(species["energy_source"],TE_pdiffusion);
       add(species["energy_flow_xlow"], flow_xlow);
       add(species["energy_flow_zlow"], flow_zlow);
     }
@@ -157,11 +158,11 @@ void AnomalousDiffusion3D::transform(Options& state) {
   if (include_chi) {
     // Gradients in temperature that drive energy flows
     if (use_finite_difference){
-      add(species["energy_source"],
-          Div_a_Grad_perp_curv(anomalous_chi * N, T));
+      TE_conduction = Div_a_Grad_perp_curv(anomalous_chi * N, T);
+      add(species["energy_source"],TE_conduction);
     } else {
-      add(species["energy_source"],
-	  (*dagp)(anomalous_chi * N, T, flow_xlow, flow_zlow, upwind));
+      TE_conduction = (*dagp)(anomalous_chi * N, T, flow_xlow, flow_zlow, upwind);
+      add(species["energy_source"],TE_conduction);
       add(species["energy_flow_xlow"], flow_xlow);
       add(species["energy_flow_zlow"], flow_zlow);
     }
@@ -191,11 +192,29 @@ void AnomalousDiffusion3D::outputVars(Options& state) {
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Pnorm = Nnorm * Tnorm;
+
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   if (diagnose) {
       AUTO_TRACE();
       // Save particle, momentum and energy channels
+      if (include_chi) {
+	set_with_attrs(state[std::string("TE_P") + name + std::string("_perpconduction")], TE_conduction,
+		       {{"time_dimension", "t"},
+			{"units", "Pa s^-1"},
+			{"conversion", Pnorm * Omega_ci}});
+      }
+
+      if (include_D) {
+	set_with_attrs(state[std::string("TE_P") + name + std::string("_perpdiffusion")], TE_pdiffusion,
+                       {{"time_dimension", "t"},
+                        {"units", "Pa s^-1"},
+                        {"conversion", Pnorm * Omega_ci}});
+
+      }
+      
       set_with_attrs(state[std::string("S") + name + std::string("_anom")], density_source,
                       {{"time_dimension", "t"},
                       {"units", "m^-3 s^-1"},
