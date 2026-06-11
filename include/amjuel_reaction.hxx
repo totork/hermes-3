@@ -25,6 +25,26 @@ protected:
     return value;
   }
 
+
+  Field3D field_avg(const Field3D& f) {
+    Field3D result{zeroFrom(f)};
+
+    BOUT_FOR(i, f.getRegion("RGN_NOY")) {
+
+      const auto ixp = i.xp();
+      const auto ixm = i.xm();
+      
+      const auto izp = i.zp();
+      const auto izm = i.zm();
+
+      result[i] = 0.25 * f[i] + 0.125 * ( f[ixp] + f[ixm] + f[izp] + f[izm])
+	+ 0.0625 * ( f[ixp.zp()] + f[ixp.zm()] + f[ixm.zp()] + f[ixm.zm()]);
+    }
+
+    return result;
+  }
+  
+
   /// Evaluate a double polynomial fit in n and T
   /// (page 20 of amjuel.pdf)
   ///
@@ -96,16 +116,11 @@ protected:
     // Calculate reaction rate using cell averaging. Optionally scale by multiplier
 
     reaction_rate =  0.0;
-    BOUT_FOR(i, Ne.getRegion("RGN_NOY")){
-      const auto iyp = i.yp();
-      const auto iym = i.ym();
-      BoutReal avgNe = 0.0;
-      BoutReal avgN1 = 0.0;
-      BoutReal avgTe = 0.0;
-      avgNe = Ne[i];
-      avgN1 = N1[i];
-      avgTe = Te[i];      
-      reaction_rate[i] = avgNe * avgN1 * evaluate(rate_coefs, avgTe * Tnorm, avgNe * Nnorm) * Nnorm / FreqNorm * rate_multiplier;
+    Field3D avgNe = field_avg(Ne);
+    Field3D avgN1 = field_avg(N1);
+    Field3D avgTe = field_avg(Te);
+    BOUT_FOR(i, Ne.getRegion("RGN_NOY")){      
+      reaction_rate[i] = avgNe[i] * avgN1[i] * evaluate(rate_coefs, avgTe[i] * Tnorm, avgNe[i] * Nnorm) * Nnorm / FreqNorm * rate_multiplier;
     }
     
 
@@ -167,17 +182,7 @@ protected:
 
     energy_loss =  0.0;
     BOUT_FOR(i, Ne.getRegion("RGN_NOY")){
-      const auto iyp = i.yp();
-      const auto iym = i.ym();
-      BoutReal avgNe = 0.0;
-      BoutReal avgN1 = 0.0;
-      BoutReal avgTe = 0.0;
-
-      avgNe =	Ne[i];
-      avgN1 =	N1[i];
-      avgTe =	Te[i];
-
-      energy_loss[i] = avgNe * avgN1 * evaluate(radiation_coefs, avgTe * Tnorm, avgNe * Nnorm) * Nnorm / (Tnorm * FreqNorm) * radiation_multiplier;
+      energy_loss[i] = avgNe[i] * avgN1[i] * evaluate(radiation_coefs, avgTe[i] * Tnorm, avgNe[i] * Nnorm) * Nnorm / (Tnorm * FreqNorm) * radiation_multiplier;
     }
 
     
