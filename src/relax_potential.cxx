@@ -445,7 +445,6 @@ void RelaxPotential::finally(const Options& state) {
     }
   } else {
     // Non-Boussinesq. Calculate mass density by summing over species
-    throw BoutException("Non_boussinesq not implemented");
     // Calculate vorticity from potential phi
     Field3D phi_vort = 0.0;
     for (auto& kv : allspecies.getChildren()) {
