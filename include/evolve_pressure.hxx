@@ -105,7 +105,7 @@ private:
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;     ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
-
+  bool spitzer_conductivity;
   BoutReal adapt_source;
   
   BoutReal hyper_z; ///< Hyper-diffusion
@@ -126,7 +126,7 @@ private:
   bool numerical_viscous_heating; ///< Include heating due to numerical viscosity?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D Sp_nvh; ///< Pressure source due to artificial viscosity
-
+  Field3D TE_ExB, TE_parflow, TE_conduction, TE_lowsource, TE_sources;
   Coordinates::FieldMetric bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 };
 

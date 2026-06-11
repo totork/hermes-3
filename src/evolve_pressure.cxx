@@ -33,6 +33,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Perpendicular diffusion at low density")
                            .withDefault<bool>(false);
 
+  spitzer_conductivity = options["spitzer_conductivity"]
+                           .doc("Use spitzer conductivity instead of the whole collision frequency?")
+                           .withDefault<bool>(false);
+  
   output_ddt = options["output_ddt"]
                    .doc("Include ExB advection?")
                    .withDefault<bool>(false);
@@ -232,6 +236,14 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   }
 
   T.setBoundary(fmt::format("T{}", name));
+
+  if (diagnose) {
+    TE_ExB = 0.0;
+    TE_parflow = 0.0;
+    TE_conduction = 0.0;
+    TE_lowsource = 0.0;
+    TE_sources = 0.0;
+  }
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -320,10 +332,11 @@ void EvolvePressure::finally(const Options& state) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     Field3D phi = get<Field3D>(state["fields"]["phi"]);
-
-    ddt(P) = -scale_ExB * Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
+    TE_ExB = -scale_ExB * Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
+    ddt(P) = TE_ExB;
   } else {
-    ddt(P) = 0.0;
+    TE_ExB = 0.0;
+    ddt(P) = TE_ExB;
   }
 
   if (species.isSet("velocity")) {
@@ -340,18 +353,20 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative);
+      TE_parflow = -FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative) - (2. / 3) * Pfloor * Div_par(V);
+      
+      ddt(P) += TE_parflow;
       // Work done. This balances energetically a term in the momentum equation
-      ddt(P) -= (2. / 3) * Pfloor * Div_par(V);
+
 
     } else {
       // Use V * Grad(P) form
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative);
+      TE_parflow = -(5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative) + (2. / 3) * V * Grad_par(P);
 
-      ddt(P) += (2. / 3) * V * Grad_par(P);
+      ddt(P) += TE_parflow;
     }
     if (flow_ylow.isAllocated()) {
       flow_ylow *= 5. / 2; // Energy flow
@@ -402,7 +417,8 @@ void EvolvePressure::finally(const Options& state) {
 
 
   if (T_lowsource > 0.0) {
-    ddt(P) += low_sourceterm(T, T_lowsource, lowsource_scale);
+    TE_lowsource = low_sourceterm(T, T_lowsource, lowsource_scale);
+    ddt(P) += TE_lowsource;
   } 
   
 
@@ -469,7 +485,9 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    TE_conduction = (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    ddt(P) += TE_conduction;
+    
     if (    flow_ylow_conduction.isAllocated()) {
       if (flow_ylow.isAllocated()) {
 	flow_ylow += flow_ylow_conduction;
@@ -537,7 +555,9 @@ void EvolvePressure::finally(const Options& state) {
     throw BoutException("Components must evolve `energy_source` rather then `pressure_source`");
   }
 #endif
-  ddt(P) += Sp;
+  
+  TE_sources = Sp;
+  ddt(P) += TE_sources;
 
   // Term to force evolved P towards N * T
   // This is active when P < 0 or when N < density_floor
@@ -682,6 +702,34 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
+
+    set_with_attrs(state[std::string("TE_P") + name + std::string("_ExB")], TE_ExB,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci}});
+
+    set_with_attrs(state[std::string("TE_P") + name + std::string("_parflow")], TE_parflow,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci}});
+
+    set_with_attrs(state[std::string("TE_P") + name + std::string("_conduction")], TE_conduction,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci}});
+
+    set_with_attrs(state[std::string("TE_P") + name + std::string("_lowsource")], TE_lowsource,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci}});
+
+    set_with_attrs(state[std::string("TE_P") + name + std::string("_sources")], TE_sources,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci}});
+
+
+    
 
     if (flow_xlow.isAllocated()) {
       set_with_attrs(state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,
