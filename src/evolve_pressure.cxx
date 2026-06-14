@@ -122,7 +122,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-6) * Omega_ci;
-
+  lowsource_exponential = options["lowsource_exponential"].withDefault<bool>(false);
   
   auto& p_options = alloptions[std::string("P") + name];
   source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci;   // [Pa/s] or [W/m^3] if converted to energy
@@ -244,6 +244,25 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     TE_lowsource = 0.0;
     TE_sources = 0.0;
   }
+
+  if (spitzer_conductivity) {
+    auto Cs0 = Lnorm * Omega_ci;
+    BoutReal atomicmass = p_options["AA"].withDefault<BoutReal>(1.0);
+    
+    switch(identifySpeciesType(name)) {
+    case SpeciesType::ion:
+      lambda_sh = 24. - log(sqrt(Nnorm / 1e6) / Tnorm);
+      tau_0 = sqrt(atomicmass) / (4.78e-8 * (Nnorm / 1e6) * lambda_sh * pow(Tnorm, -3. / 2));
+      break;
+    case SpeciesType::electron:
+      lambda_sh = 23. - log(sqrt(2. * Nnorm / 1e6) / pow(Tnorm, 1.5));
+      tau_0 = 1. / (2.91e-6 * (Nnorm / 1e6) * lambda_sh * pow(Tnorm, -3. / 2));
+      break;
+    }
+
+    tau_1 = (Cs0 / Lnorm ) * tau_0;    
+  }
+  
 }
 
 void EvolvePressure::transform(Options& state) {
@@ -417,7 +436,7 @@ void EvolvePressure::finally(const Options& state) {
 
 
   if (T_lowsource > 0.0) {
-    TE_lowsource = low_sourceterm(T, T_lowsource, lowsource_scale);
+    TE_lowsource = low_sourceterm(T, T_lowsource, lowsource_scale, lowsource_exponential);
     ddt(P) += TE_lowsource;
   } 
   
@@ -427,7 +446,18 @@ void EvolvePressure::finally(const Options& state) {
 
     // Calculate ion collision times
     //const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
-    const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);                                                                                                                                                                                  
+
+    Field3D tau = 0.0;
+    if (spitzer_conductivity) {
+      Field3D T32 = T * sqrt(T);
+      
+      tau = tau_1 * T32 / N;
+      
+    } else {
+    
+      tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
+      
+    }
 
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
@@ -436,6 +466,7 @@ void EvolvePressure::finally(const Options& state) {
     // kappa ~ n * v_th^2 * tau
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
+
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
     if (kappa_limit_alpha > 0.0 && limiter_Grillix) {

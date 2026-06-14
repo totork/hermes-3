@@ -90,6 +90,7 @@ private:
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
   BoutReal T_lowsource;
   BoutReal lowsource_scale;
+  bool lowsource_exponential;
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
   bool isMMS;
@@ -107,6 +108,8 @@ private:
   FieldGeneratorPtr source_prefactor_function;
   bool spitzer_conductivity;
   BoutReal adapt_source;
+
+  BoutReal tau_1, lambda_sh, tau_0;
   
   BoutReal hyper_z; ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T
