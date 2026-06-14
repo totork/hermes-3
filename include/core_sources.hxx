@@ -43,6 +43,7 @@ private:
   BoutReal input_power, input_particleflux, core_area;
   Field3D inner_area;
   BoutReal densitytarget, temperaturetarget;
+  BoutReal target_timescale;
   Field3D source_pressure, source_density;
 };
 

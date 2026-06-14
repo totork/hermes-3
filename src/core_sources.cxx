@@ -38,11 +38,11 @@ CoreSources::CoreSources(std::string name, Options& alloptions, Solver*) {
   
   densitytarget = options["densitytarget"].doc("Target density the sources should be cut off after?").withDefault<BoutReal>(-1.0) / Nnorm;
   temperaturetarget = options["temperaturetarget"].doc("Target density the sources should be cut off after?").withDefault<BoutReal>(-1.0)/ Tnorm;
-
+  target_timescale = options["target_timescale"].withDefault<BoutReal>(0.02);
 
   BoutReal powerfluxdensity = input_power / core_area;
   BoutReal particlefluxdensity = input_particleflux / core_area;
-
+  
   source_density = 0.0;
   source_pressure = 0.0;
 
@@ -101,9 +101,23 @@ void CoreSources::transform(Options& state) {
                                  ? getNonFinal<Field3D>(species["energy_source"])
                                  : 0.0;
 
-    species_density_source = species_density_source + source_density;
+    const Field3D N = get<Field3D>(species["density"]);
+    const Field3D P = get<Field3D>(species["pressure"]);
+    const Field3D T = P / N;
+    
+    if (densitytarget > 0.0) {
+      species_density_source = species_density_source + adaptive_sourceterm(N, source_density, densitytarget, target_timescale);
+    } else {
+      species_density_source = species_density_source + source_density;
+    }
 
-    species_energy_source = species_energy_source + source_pressure;
+
+    if (temperaturetarget > 0.0) {
+      species_energy_source = species_energy_source + adaptive_sourceterm(T, source_pressure, temperaturetarget, target_timescale);
+    } else {
+      species_energy_source = species_energy_source + source_pressure;
+    }
+       
     
     set<Field3D>(species["density_source"], species_density_source);
     set<Field3D>(species["energy_source"], species_energy_source);
