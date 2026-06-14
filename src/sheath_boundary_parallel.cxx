@@ -33,12 +33,29 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 
 
+BoutReal smooth_step(BoutReal x, BoutReal f1, BoutReal f2) {
+
+  if (x <= f1) {
+    return 0.0;
+  } else if (x >= f2) {
+    return 1.0;
+  } else {
+    BoutReal t = (x-f1) / (f2 - f1);
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);    
+  }
+  
+}
+
 extern Options* tracking;
 SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &alloptions, Solver *) {
   AUTO_TRACE();
   
   Options &options = alloptions[name];
 
+  const Options& units = alloptions["units"];
+  const BoutReal Tnorm = units["eV"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  
   Ge = options["secondary_electron_coef"]
            .doc("Effective secondary electron emission coefficient")
            .withDefault(0.0);
@@ -52,6 +69,23 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
                        "Should be between 0 and 1")
                   .withDefault(1.0);
 
+
+  bool dampen_low_density;
+  BoutReal dampen_N_low,	dampen_N_high;
+
+  dampen_low_density = options["dampen_low_density"]
+          .doc("Dampen the sheath velocity to zero in low density regions?")
+          .withDefault<bool>(false);
+
+  dampen_N_low = options["dampen_N_low"].withDefault(3e17) / Nnorm;
+
+  dampen_N_high = options["dampen_N_high"].withDefault(5e17) / Nnorm;
+
+
+  
+
+  
+
   if ((sin_alpha < 0.0) or (sin_alpha > 1.0)) {
     throw BoutException("Range of sin_alpha must be between 0 and 1");
   }
@@ -64,8 +98,6 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
   always_zero_current = options["always_zero_current"]
     .doc("Always set zero current?").withDefault<bool>(false);
 
-  const Options& units = alloptions["units"];
-  const BoutReal Tnorm = units["eV"];
 
   // Read wall voltage, convert to normalised units
   wall_potential = options["wall_potential"]
@@ -283,10 +315,16 @@ void SheathBoundaryParallel::transform(Options &state) {
       const BoutReal gamma_e = floor(2 / (1. - Ge) + (phisheath - phi_wall) / floor(tesheath, 1e-5), 0.0);
 
       // Electron velocity into sheath (< 0)
-      const BoutReal vesheath = (tesheath < 1e-10) ?
+      BoutReal vesheath = (tesheath < 1e-10) ?
           0.0 :
           pnt.dir * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge) * exp(-(phisheath - phi_wall) / tesheath);
 
+      if (dampen_low_density) {
+	vesheath = smooth_step(nesheath, dampen_N_low, dampen_N_high) * vesheath;
+      }
+
+      
+      
       pnt.dirichlet_o2(Ve, vesheath);
       if (has_NVe) {
 	pnt.dirichlet_o2(NVe, Me * nesheath * vesheath);
@@ -450,9 +488,16 @@ void SheathBoundaryParallel::transform(Options &state) {
 	  clip((adiabatic * tisheath + Zi * s_i * tesheath * grad_ne / grad_ni) / Mi,
 	       0, 100); // Limit for e.g. Ni zero gradient
 
+	if (dampen_low_density) {
+	  C_i_sq = smooth_step(nisheath, dampen_N_low, dampen_N_high) * C_i_sq;
+        }
+	
+	const BoutReal visheath = pnt.dir * sqrt(C_i_sq); // sign changes -> into sheath
+        
+
+	
 	const BoutReal gamma_i = 2.5 + 0.5 * Mi * C_i_sq / tisheath; // + Δγ 
 
-	const BoutReal visheath = pnt.dir * sqrt(C_i_sq); // sign changes -> into sheath
 
 	// Set boundary conditions on flows
 	pnt.dirichlet_o2(Vi, visheath);

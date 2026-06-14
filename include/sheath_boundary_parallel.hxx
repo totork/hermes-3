@@ -85,6 +85,9 @@ private:
 
   Field3D wall_potential; ///< Voltage at the wall. Normalised units.
 
+  bool dampen_low_density;
+  BoutReal dampen_N_low, dampen_N_high;
+  
   bool floor_potential; ///< Apply floor to sheath potential?
 
   bool legacy_match{true};
