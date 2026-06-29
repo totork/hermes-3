@@ -119,6 +119,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Set Dnn to 0? Useful for MMS tests")
                    .withDefault<bool>(false);
 
+  disable_ddt = options["disable_ddt"]
+                   .doc("Disable ddt of all evolved variables?")
+                   .withDefault<bool>(false);
+  
   parallel_dirichlet = options["parallel_dirichlet"]
                    .doc("Use parallel dirichlet boundary conditions for the plasma?")
                    .withDefault<bool>(true);
@@ -731,6 +735,19 @@ void NeutralMixed::finally(const Options& state) {
 
 
   Pn = Pn_solver;
+
+
+  if (disable_ddt) {
+    ddt(Nn) = 0.0;
+    if (evolve_momentum) {
+      ddt(NVn) = 0.0;
+    }
+    if (evolve_pressure) {
+      ddt(Pn) = 0.0;
+    }
+  }
+
+  
 }
 
 void NeutralMixed::outputVars(Options& state) {
@@ -1033,32 +1050,23 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
     return;
   }
   const auto& species = state["species"][name];
-  const Field3D N = get<Field3D>(species["density"]);
-
-  Field3D DTdtN = Dnn * Tn * ddt(Nn);
-  DTdtN.applyBoundary("neumann");
-  mesh->communicate(DTdtN);
-  ddt(Pn) -= (gamma * 5. / 3) * Div_a_Grad_perp(DTdtN, logPnlim);
-
+ 
   
   // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coef = - gamma * Dnn;
-
-  inv->setCoefA(1 - gamma * Div_a_Grad_perp(Dnn, logPnlim));
+  Field3D coeff = (5.0 / 3.0) *  gamma * Dnn;
+  coeff.applyBoundary("neumann");
+  mesh->communicate(coeff);
+  
+  inv->setCoefA(1.0);
+  inv->setCoefD(-coeff);
   inv->setCoefC1(-1. / ((gamma * 5. / 3) * Dnn));
   inv->setCoefC2(logPnlim);
-  inv->setCoefD((-gamma * 5. / 3) * Dnn);
   
   Field3D dT = ddt(Pn);
   dT.applyBoundary("neumann");
   mesh->communicate(dT);
   Field3D dummy = 0.0;
-  ddt(Pn) = inv->solve(dT, ddt(Pn));
+  ddt(Pn) = inv->solve(dT, dT);
 
-  ddt(Nn) -= gamma * Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
-
-  if (evolve_momentum) {
-    ddt(NVn) -= gamma * Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
-  }
   
 }

@@ -67,7 +67,7 @@ private:
   bool inherited_T;
   BoutReal include_cond;
   Field3D anomalous_conduction;
-  
+  bool disable_ddt;
   bool parallel_dirichlet;
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
