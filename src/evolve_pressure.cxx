@@ -48,7 +48,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
     .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
+  pressure_floor = density_floor * temperature_floor;
 
   scale_ExB = options["scale_ExB"]
                    .doc("Scale ExB flow?")
