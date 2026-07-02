@@ -150,6 +150,27 @@ private:
     n.R = n.c + 0.5 * slope; // 0.25*(n.p - n.m)
   }
 
+  void VanAlbada(Stencil1D& n, const BoutReal h){
+    const BoutReal dl = n.c - n.m;
+    const BoutReal dr = n.p - n.c;
+
+    const BoutReal denom = dl * dl + dr * dr;
+
+    // Smoothness parameters:
+    // - keep division well-defined when dl=dr=0
+    // - provide a differentiable approximation to max(dl*dr, 0)
+    const BoutReal eps = 1e-12 * denom + 1e-30;
+
+    const BoutReal ab = dl * dr;
+    const BoutReal ab_pos = 0.5 * (ab + sqrt(ab * ab + eps * eps));
+
+    const BoutReal slope = (ab_pos * (dl + dr)) / (denom + eps);
+
+    n.L = n.c - 0.5 * slope;
+    n.R = n.c + 0.5 * slope;
+  }
+  
+
   // Monotonized Central limiter (Van-Leer)                                                                                                             
   void MC(Stencil1D& n, const BoutReal h) {
     BoutReal slope = minmod(2. * (n.p - n.c), 0.5 * (n.p - n.m), 2. * (n.c - n.m));
@@ -199,19 +220,19 @@ private:
       sx.c = f[i];
       sx.m = f[ixm];
       sx.p = f[ixp];      
-      MinMod(sx, coord->dx[i]);
+      VanAlbada(sx, coord->dx[i]);
 
       Stencil1D sxm;
       sxm.c = f[ixm];
       sxm.m = f[ixmm];
       sxm.p = f[i];
-      MinMod(sxm, coord->dx[i]);
+      VanAlbada(sxm, coord->dx[i]);
 
       Stencil1D sxp;
       sxp.c = f[ixp];
       sxp.m = f[i];
       sxp.p = f[ixpp];
-      MinMod(sxp, coord->dx[i]);
+      VanAlbada(sxp, coord->dx[i]);
       
       BoutReal amax_xup = BOUTMAX(fabs(vx[i]),fabs(vx[ixp]),spd[i],spd[ixp]);
       BoutReal flux_xup = (0.5 * (sx.R + sxp.L) * v_xup + 0.5 * amax_xup * (sx.R - sxp.L)) * cellarea_xup;
@@ -228,19 +249,19 @@ private:
       sz.c = f[i];
       sz.m = f[izm];
       sz.p = f[izp];
-      MinMod(sz, coord->dz[i]);
+      VanAlbada(sz, coord->dz[i]);
 
       Stencil1D szm;
       szm.c = f[izm];
       szm.m = f[izmm];
       szm.p = f[i];
-      MinMod(szm, coord->dz[i]);
+      VanAlbada(szm, coord->dz[i]);
 
       Stencil1D szp;
       szp.c = f[izp];
       szp.m = f[i];
       szp.p = f[izpp];
-      MinMod(szp, coord->dz[i]);
+      VanAlbada(szp, coord->dz[i]);
       
       
       BoutReal amax_zup = BOUTMAX(fabs(vz[i]),fabs(vz[izp]),spd[i],spd[izp]);
