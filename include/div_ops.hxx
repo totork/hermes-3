@@ -178,7 +178,7 @@ inline void VA(StencilH3& n, const BoutReal h){
 /// fv is not interpolated to cell boundaries.
 template <typename CellEdges = MC>
 const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
-                          const Field3D& wave_speed_in, bool fixflux = true) {
+                          const Field3D& wave_speed_in, bool fixflux = true, int mode = 0) {
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   Mesh* mesh = f_in.getMesh();
   Coordinates* coord = f_in.getCoordinates();
@@ -212,17 +212,44 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
                                           fabs(v_in[i]),
                                   fabs(v_up[iyp]),
                                   fabs(v_down[iym]));
+      if (mode==0) {
+	result[i] = B[i] * (
+			    (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
+			    - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
+			    // Penalty terms. This implementation is very dissipative.
+			    // Note: This version adds a viscosity that damps gradients of velocity
+			    + amax * (f_in[i] + f_up[iyp]) * (v_in[i] - v_up[iyp]) / (B[i] + B_up[iyp])
+			    + amax * (f_in[i] + f_down[iym]) * (v_in[i] - v_down[iym]) / (B[i] + B_down[iym])
+			    )
+	  / (2 * dy[i] * sqrt(g_22[i]));
+      } else if (mode==1) {
 
-      result[i] = B[i] * (
-                          (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
-                          - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
-                          // Penalty terms. This implementation is very dissipative.
-			  // Note: This version adds a viscosity that damps gradients of velocity
-			  + amax * (f_in[i] + f_up[iyp]) * (v_in[i] - v_up[iyp]) / (B[i] + B_up[iyp])
-                          + amax * (f_in[i] + f_down[iym]) * (v_in[i] - v_down[iym]) / (B[i] + B_down[iym])
-                          )
-        / (2 * dy[i] * sqrt(g_22[i]));
+	StencilH3 sf;
+	sf.c = f_in[i];
+	sf.m = f_down[iym];
+	sf.p = f_up[iyp];
+	VA(sf,coord->dy[i]);
+	
+	StencilH3 sv;
+	sv.c = v_in[i];
+	sv.m = v_down[iym];
+	sv.p = v_up[iyp];
+	VA(sv,coord->dy[i]);
+        
+	BoutReal midflux_up = sf.R * sv.R * sv.R;
+	BoutReal penflux_up = amax * sf.R * (v_in[i] - v_up[iyp]);
+	BoutReal flux_up = (midflux_up + penflux_up) * coord->cellarea_yup[i];
+	
+	BoutReal midflux_down = sf.L * sv.L * sv.L;
+	BoutReal penflux_down = -amax * sf.L * (v_in[i] - v_down[iym]);
+	BoutReal flux_down = (midflux_down + penflux_down) * coord->cellarea_ydown[i];
+	
+	result[i] = (flux_up - flux_down) / coord->cellvolume[i];
 
+	
+      } else {
+	throw BoutException("No mode chosen for parallel divergence of momentum advection!");
+      }
 #if CHECK > 0
       if(!std::isfinite(result[i])) {
         throw BoutException("Non-finite value in Div_par_fvv at {}\n"

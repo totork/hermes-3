@@ -250,7 +250,7 @@ void EvolveMomentum::finally(const Options &state) {
     Field3D NVV = NV * V;
     ddt(NV) -= Div_par(NVV);
   } else {
-    ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux);
+    ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux, mode_div_par);
   }
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
