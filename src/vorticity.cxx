@@ -215,11 +215,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
       }
     }
 
-    zeroes = 0.0;
-    zeroes.applyBoundary("neumann");
-    mesh->communicate(zeroes);
-    zeroes.applyParallelBoundary("parallel_neumann_o1");
-    
   }
 
   if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>()
@@ -271,6 +266,11 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   if (zonal_neumann) {
     phiSolver_zonalneumann = Laplacian::create(&options["laplacian_zonalneumann"]);
   }
+
+  zeroes = 0.0;
+  zeroes.applyBoundary("neumann");
+  mesh->communicate(zeroes);
+  zeroes.applyParallelBoundary("parallel_neumann_o1");
   
   
 }
@@ -816,10 +816,6 @@ void Vorticity::finally(const Options& state) {
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
     Field3D dummy1;
-    zeroes = 0.0;
-    zeroes.applyBoundary("neumann");
-    mesh->communicate(zeroes);
-    zeroes.applyParallelBoundary("parallel_neumann_o1");
     ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(-phi, zeroes, sound_speed, dummy1,  false,
 						  false, true);
   }
