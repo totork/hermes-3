@@ -25,6 +25,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   yboundary.init(options);
 
+  mode_div_par = options["mode_div_par"]
+                   .doc("Which mode to use for the parallel divergence. 0 is the standard mode, 1 is with slope limiter.")
+                   .withDefault<int>(0);
+
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
@@ -372,7 +376,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      TE_parflow = -FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative) - (2. / 3) * Pfloor * Div_par(V);
+      TE_parflow = -FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par) - (2. / 3) * Pfloor * Div_par(V);
       
       ddt(P) += TE_parflow;
       // Work done. This balances energetically a term in the momentum equation
@@ -383,7 +387,7 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      TE_parflow = -(5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative) + (2. / 3) * V * Grad_par(P);
+      TE_parflow = -(5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par) + (2. / 3) * V * Grad_par(P);
 
       ddt(P) += TE_parflow;
     }

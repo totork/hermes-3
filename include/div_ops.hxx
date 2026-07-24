@@ -32,6 +32,7 @@
 #include <bout/vector3d.hxx>
 #include <bout/output_bout_types.hxx>
 
+
 /*!
  * Diffusion in index space
  *
@@ -143,6 +144,32 @@ struct Superbee {
   }
 };
 
+
+struct StencilH3 {
+ 
+  BoutReal c, m, p, mm, pp;
+
+ 
+  BoutReal L, R;
+};
+
+inline void VA(StencilH3& n, const BoutReal h){
+
+  const BoutReal dl = n.c - n.m;
+  const BoutReal dr = n.p - n.c;
+  const BoutReal denom = dl * dl + dr * dr;
+  const BoutReal eps = 1e-12 * denom + 1e-30;
+  const BoutReal ab = dl * dr;
+  const BoutReal ab_pos = 0.5 * (ab + sqrt(ab * ab + eps * eps));
+  const BoutReal slope = (ab_pos * (dl + dr)) / (denom + eps);
+  n.L = n.c - 0.5 * slope;
+  n.R = n.c + 0.5 * slope;
+
+}
+
+  
+
+  
 /// This operator calculates Div_par(f v v)
 /// It is used primarily (only?) in the parallel momentum equation.
 ///
@@ -580,7 +607,8 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
 template <typename CellEdges = MC>
 Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
-		    Field3D &flow_ylow, bool fixflux = true, bool dissipative = false, bool bndry_flux = true) {
+		    Field3D &flow_ylow, bool fixflux = true, bool dissipative = false, bool bndry_flux = true,
+		    const int mode = 0) {
 
   Coordinates* coord = f_in.getCoordinates();
 
@@ -613,43 +641,72 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
       // Divergencefree B leads to A1 * B1 = A2 * B2 -> A2 = A1 * B1 / B2
       BoutReal flux_up = 0.0;
       BoutReal flux_down = 0.0;
-      if (dissipative) {
-
-	flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
-        flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
-
-	if (coord->has_bndry_yup[i] == true) {
+      if (mode == 0){
+	if (dissipative) {
+	  
+	  flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
+	  flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
+	  
+	  if (coord->has_bndry_yup[i] == true) {
+	    flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
+	  }
+	  if (coord->has_bndry_ydown[i] == true) {
+	    flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
+	  }
+	  
+	} else {
+	  
 	  flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
-	}
-	if (coord->has_bndry_ydown[i] == true) {
 	  flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
+	  
 	}
-        
+
+	if (coord->has_bndry_yup[i] == true && bndry_flux == false) {
+	  flux_up = 0.0;
+	}
+	
+	if (coord->has_bndry_ydown[i] == true && bndry_flux == false) {
+	  flux_down = 0.0;
+	}
+	
+	if (coord->has_bndry_yup[i] == true && flow_ylow.isAllocated()) {
+	  flow_ylow[i] = flux_up / coord->cellvolume[i];
+	}
+	
+	if (coord->has_bndry_ydown[i] == true && flow_ylow.isAllocated()) {
+	  flow_ylow[i] =	flux_down / coord->cellvolume[i];
+	}
+      
+      } else if (mode==1) { // Using slope limiters
+
+	StencilH3 sf;
+	sf.c = f_in[i];
+	sf.m = f_down[iym];
+	sf.p = f_up[iyp];
+	VA(sf,coord->dy[i]);
+	
+	StencilH3 sv;
+	sv.c = v_in[i];
+	sv.m = v_down[iym];
+	sv.p = v_up[iyp];
+	VA(sv,coord->dy[i]);
+	
+	const BoutReal amax = wave_speed_in[i];
+
+	BoutReal flux_up = 0.0;
+	BoutReal flux_down = 0.0;
+	
+	flux_up = (sf.R * sv.R + f_in[i] * amax - f_up[iyp] * amax) * coord->cellarea_yup[i];
+
+	flux_down = (sf.L * sv.L  - f_in[i] * amax + f_down[iym] * amax) * coord->cellarea_ydown[i];
+
+	
       } else {
-
-	flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
-	flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
-
+	throw BoutException("No mode chosen for parallel divergence!");  
       }
-
-      if (coord->has_bndry_yup[i] == true && bndry_flux == false) {
-	flux_up = 0.0;
-      }
-
-      if (coord->has_bndry_ydown[i] == true && bndry_flux == false) {
-	flux_down = 0.0;
-      }
-
-      if (coord->has_bndry_yup[i] == true && flow_ylow.isAllocated()) {
-	flow_ylow[i] = flux_up / coord->cellvolume[i];
-      }
-
-      if (coord->has_bndry_ydown[i] == true && flow_ylow.isAllocated()) {
-        flow_ylow[i] =	flux_down / coord->cellvolume[i];
-      }
-      
       result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
-      
+
+		 
     }
     return result;
   }

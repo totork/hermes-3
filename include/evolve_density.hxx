@@ -84,7 +84,7 @@ private:
   bool isMMS;
   Field3D source, final_source; ///< External input source
   Field3D Sn; ///< Total density source
-
+  int mode_div_par;
   Field3D lowsource_term;
   
   BoutReal adapt_source;

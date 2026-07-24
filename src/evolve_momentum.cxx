@@ -30,6 +30,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   auto& options = alloptions[name];
 
+  mode_div_par = options["mode_div_par"]
+                   .doc("Which mode to use for the parallel divergence. 0 is the standard mode, 1 is with slope limiter.")
+                   .withDefault<int>(0);
+  
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]

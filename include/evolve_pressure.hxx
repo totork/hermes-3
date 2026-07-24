@@ -76,7 +76,7 @@ private:
 
   Field3D P;    ///< Pressure (normalised)
   Field3D T, N; ///< Temperature, density
-
+  int mode_div_par;
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool exb_advection;   ///< Include ExB advection?

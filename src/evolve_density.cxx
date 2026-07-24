@@ -20,7 +20,9 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   auto& options = alloptions[name];
 
-  
+  mode_div_par = options["mode_div_par"]
+                   .doc("Which mode to use for the parallel divergence. 0 is the standard mode, 1 is with slope limiter.")
+                   .withDefault<int>(0);
   
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
@@ -297,7 +299,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
     flow_ylow = 0.0;
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, false, dissipative);
+    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par);
     
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
