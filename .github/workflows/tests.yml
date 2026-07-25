@@ -19,7 +19,7 @@ jobs:
       matrix:
         config:
           - name: "CMake default options"
-            os: ubuntu-22.04
+            os: ubuntu-latest
             configure_options: ""
 
           - name: "3D Metrics"
