@@ -723,10 +723,14 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 	BoutReal flux_up = 0.0;
 	BoutReal flux_down = 0.0;
 	
-	flux_up = (sf.R * sv.R + f_in[i] * amax - f_up[iyp] * amax) * coord->cellarea_yup[i];
-
-	flux_down = (sf.L * sv.L  - f_in[i] * amax + f_down[iym] * amax) * coord->cellarea_ydown[i];
-
+	flux_up = (sf.R * sv.R) * coord->cellarea_yup[i];
+	
+	flux_down = (sf.L * sv.L) * coord->cellarea_ydown[i];
+	if (dissipative) {
+	  flux_up += (f_in[i] * amax - f_up[iyp] * amax) * coord->cellarea_yup[i];
+	  flux_down += (- f_in[i] * amax + f_down[iym] * amax) * coord->cellarea_ydown[i];
+	}
+			     
 	
       } else {
 	throw BoutException("No mode chosen for parallel divergence!");  
