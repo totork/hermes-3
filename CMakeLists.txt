@@ -61,7 +61,7 @@ set(HERMES_SOURCES
     #src/neutral_full_velocity_curv.cxx
     src/full_velocity.cxx
     src/electromagnetic.cxx
-    #src/electron_force_balance.cxx
+    src/electron_force_balance.cxx
     src/electron_viscosity.cxx
     #src/core_sources.cxx
     src/evolve_density.cxx
@@ -76,7 +76,7 @@ set(HERMES_SOURCES
     src/diamagnetic_drift_fci.cxx
     src/recalculate_metric.cxx
     src/relax_potential.cxx
-    #src/sheath_closure.cxx
+    src/sheath_closure.cxx
     src/sheath_boundary.cxx
     src/sheath_boundary_parallel.cxx
     #src/sheath_boundary_simple.cxx
@@ -132,7 +132,7 @@ set(HERMES_SOURCES
     include/diamagnetic_drift_fci.hxx
     include/div_ops.hxx
     include/electromagnetic.hxx
-    #include/electron_force_balance.hxx
+    include/electron_force_balance.hxx
     include/electron_viscosity.hxx
     #include/core_sources.hxx
     include/evolve_density.hxx

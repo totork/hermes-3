@@ -49,7 +49,6 @@ protected:
 private:
   /// Organises and schedules model components
   std::unique_ptr<ComponentScheduler> scheduler;
-  YBoundary yboundary;
   /// Stores the dimensional units
   Options units;
 

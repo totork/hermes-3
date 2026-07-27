@@ -44,7 +44,6 @@ BoutReal smooth_step(BoutReal x, BoutReal f1, BoutReal f2) {
   
 }
 
-extern Options* tracking;
 SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &alloptions, Solver *)
   : yboundary(YBndryType::all, nullptr, *mesh){
   
@@ -543,11 +542,6 @@ void SheathBoundaryParallel::transform(Options &state) {
 
     if (species.isSet("momentum")) {
       setBoundary(species["momentum"], fromFieldAligned(NVi));
-    }
-    if (tracking) {
-      saveParallel(*tracking, fmt::format("NV{}_sheath", kv.first), NVi);
-      saveParallel(*tracking, fmt::format("N{}_sheath",kv.first), Ni);
-      saveParallel(*tracking, fmt::format("V{}_sheath", kv.first), Vi);
     }
     // Additional loss of energy through sheath
     // Note: Already includes previously set sources

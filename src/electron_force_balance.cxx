@@ -1,5 +1,6 @@
 
 #include <bout/difops.hxx>
+#include <bout/mesh.hxx>
 
 #include "../include/electron_force_balance.hxx"
 
