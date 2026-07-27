@@ -110,7 +110,7 @@ EvolveTraceDensity::EvolveTraceDensity(std::string name, Options& alloptions, So
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     // Clebsch coordinate system
     bracket_factor = 1.0;
@@ -177,7 +177,7 @@ void EvolveTraceDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
     
-    ddt(tN) -= FV::Div_par_mod<hermes::Limiter>(tN, V, fastest_wave, flow_ylow, false, dissipative);
+    ddt(tN) -= FV::Div_par_H3(tN, V, fastest_wave, flow_ylow, false, dissipative);
     
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term

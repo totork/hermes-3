@@ -6,7 +6,6 @@ using bout::globals::mesh;
 #include "../include/div_ops.hxx"
 #include "../include/relax_potential.hxx"
 #include "../include/hermes_build_config.hxx"
-#include <bout/yboundary_regions.hxx>
 
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver) {
@@ -57,8 +56,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                    .doc("Use dissipation on vorticity")
                    .withDefault<bool>(false);
 
-  yboundary.init(options);
-  
   sheath_parallel = options["sheath_parallel"]
                    .doc("Use parallel sheath to dissipate vorticity at the boundaries")
                    .withDefault<bool>(false);
@@ -168,7 +165,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     bracket_factor = 1.0;
   }
@@ -380,7 +377,7 @@ void RelaxPotential::finally(const Options& state) {
     zero.ydown() = 0.0;
 
     Field3D dummy;
-    ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(-phi, zero, sound_speed, dummy);
+    ddt(Vort) -= FV::Div_par_H3(-phi, zero, sound_speed, dummy);
   }
 
   // Viscosity
@@ -389,7 +386,7 @@ void RelaxPotential::finally(const Options& state) {
   ddt(Vort) += viscosity_core * (*dagp)(ones, Vort, flow_xlow, flow_zlow, false);
   
   Field3D dummy;
-  ddt(Vort) += Div_par_K_Grad_par_mod(viscosity_par, Vort, dummy, false);
+  ddt(Vort) += Div_par_K_Grad_par_H3(viscosity_par, Vort, dummy, false);
   
   // Solve diffusion equation for potential
 
@@ -403,13 +400,13 @@ void RelaxPotential::finally(const Options& state) {
 
   if (core_dissipation) {
      Field3D sound_speed = get<Field3D>(state["sound_speed"]);
-     ddt(Vort) -= (1.0 - is_SOL) * FV::Div_par_mod<hermes::Limiter>(Vort, zeroes, sound_speed, dummy);
+     ddt(Vort) -= (1.0 - is_SOL) * FV::Div_par_H3(Vort, zeroes, sound_speed, dummy);
   }
    
   if (vort_dissipation) {
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
     Field3D dummy;
-    ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(Vort, zeroes, sound_speed, dummy);
+    ddt(Vort) -= FV::Div_par_H3(Vort, zeroes, sound_speed, dummy);
   }
 
 

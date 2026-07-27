@@ -8,6 +8,10 @@
 #include "component.hxx"
 #include "div_ops.hxx"
 
+#include <bout/mesh.hxx>
+#include <bout/solver.hxx>
+
+
 class LaplaceXY;
 class Laplacian;
 

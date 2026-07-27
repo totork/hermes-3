@@ -13,6 +13,8 @@
 #include <bout/invert_laplace.hxx>
 #include <bout/version.hxx>
 #include <bout/yboundary_regions.hxx>
+#include <bout/vecops.hxx>
+
 
 using bout::globals::mesh;
 
@@ -25,12 +27,13 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 }
 
-Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
+Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
+  : yboundary(YBndryType::all, nullptr, *mesh){
 
   solver->add(Vort, "Vort");
 
   auto& options = alloptions[name];
-  yboundary.init(options);
+
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
@@ -160,15 +163,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
   
   auto coord = mesh->getCoordinates();
 
-  if (split_n0) {
-    // Create an XY solver for n=0 component
-    laplacexy = new LaplaceXY(mesh);
-    // Set coefficients for Boussinesq solve
-    if (bout::build::use_metric_3d) {
-      throw BoutException("split_n0 not useable with 3d metrics");
-    }
-    laplacexy->setCoefs(average_atomic_mass / SQ(DC(coord->Bxy)), 0.0);
-  }
   phiSolver = Laplacian::create(&options["laplacian"]);
   // Set coefficients for Boussinesq solve
   phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy));
@@ -248,7 +242,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     bracket_factor = 1.0;
   }
@@ -484,16 +478,7 @@ void Vorticity::transform(Options& state) {
   if (split_n0) {
     ////////////////////////////////////////////
     // Split into axisymmetric and non-axisymmetric components
-    Field2D Vort2D = DC(Vort); // n=0 component
-    Field2D phi_plus_pi_2d = DC(phi_plus_pi);
-    phi_plus_pi -= phi_plus_pi_2d;
-
-    phi_plus_pi_2d = laplacexy->solve(Vort2D, phi_plus_pi_2d);
-
-    // Solve non-axisymmetric part using X-Z solver
-    phi = phi_plus_pi_2d
-          + phiSolver->solve((Vort - Vort2D) * (Bsq / average_atomic_mass), phi_plus_pi)
-          - Pi_hat;
+    throw BoutException("split_n0 not available in FCI");
 
   } else {
     const auto tosolve = Vort * (Bsq / average_atomic_mass);
@@ -598,13 +583,13 @@ void Vorticity::transform(Options& state) {
 	if (P.isFci() && !P.hasParallelSlices()) {
 	  P.calcParallelSlices();
 	}
-	yboundary.iter([&](auto& region) {
-	  for (auto& pnt : region) {
-	    // const auto& i = pnt.ind();
-	    pnt.limitFree(P_fa);
-	    // P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) -
-	    // P_ydown(r.ind, mesh->yend - 1, jz);
-	  }
+	yboundary.iter([&](auto& pnt) {
+	  
+	  // const auto& i = pnt.ind();
+	  //pnt.limitFree(P_fa);
+	  pnt.extrapolate_next_o2(P_fa);
+	  // P_yup(r.ind, mesh->yend + 1, jz) = 2 * P(r.ind, mesh->yend, jz) -
+	  // P_ydown(r.ind, mesh->yend - 1, jz);
 	});
 	if (!P.isFci()) {
 	  P = fromFieldAligned(P_fa);
@@ -614,11 +599,9 @@ void Vorticity::transform(Options& state) {
 	//       Setting to free boundaries
 	auto phi_fa_tmp = phi.isFci() ? phi : toFieldAligned(phi);
 	auto& phi_fa = phi.isFci() ? phi : phi_fa_tmp;
-	yboundary.iter([&](auto& region) {
-	  for (auto& pnt : region) {
-	    const auto grad = pnt.extrapolate_grad_o2(phi_fa);
-	    pnt.neumann_o2(phi_fa, grad);
-	  }
+	yboundary.iter([&](auto& pnt) {
+	  const auto grad = pnt.extrapolate_grad_o2(phi_fa);
+	  pnt.neumann_o2(phi_fa, grad);
 	});
 	if (!phi.isFci()) {
 	  phi = fromFieldAligned(phi_fa);
@@ -777,7 +760,7 @@ void Vorticity::finally(const Options& state) {
 
 
     Field3D flow_ylow = 0.0;
-    ddt(Vort) += Z * FV::Div_par_mod<hermes::Limiter>(N, V, zeroes, flow_ylow,  false,
+    ddt(Vort) += Z * FV::Div_par_H3(N, V, zeroes, flow_ylow,  false,
 						   false, true);
 
     if (state["fields"].isSet("Apar_flutter")) {
@@ -799,7 +782,7 @@ void Vorticity::finally(const Options& state) {
   Field3D dummy;
 
   if (has_viscosity_par) { 
-    ddt(Vort) += Div_par_K_Grad_par_mod(viscosity_par, Vort, dummy);
+    ddt(Vort) += Div_par_K_Grad_par_H3(viscosity_par, Vort, dummy);
   }
     
   if (vort_dissipation) {
@@ -813,7 +796,7 @@ void Vorticity::finally(const Options& state) {
     // potential
     Field3D sound_speed = get<Field3D>(state["sound_speed"]);
     Field3D dummy1;
-    ddt(Vort) -= FV::Div_par_mod<hermes::Limiter>(-phi, zeroes, sound_speed, dummy1,  false,
+    ddt(Vort) -= FV::Div_par_H3(-phi, zeroes, sound_speed, dummy1,  false,
 						  false, true);
   }
 

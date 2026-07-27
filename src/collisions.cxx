@@ -104,10 +104,10 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 
       const Field3D velocity1 = species1.isSet("velocity")
                                     ? GET_NOBOUNDARY(Field3D, species1["velocity"])
-                                    : 0.0;
+	: Field3D{0.0};
       const Field3D velocity2 = species2.isSet("velocity")
                                     ? GET_NOBOUNDARY(Field3D, species2["velocity"])
-                                    : 0.0;
+	: Field3D{0.0};
 
       // F12 is the force on species 1 due to species 2 (normalised)
       const Field3D F12 = momfac * momentum_coefficient * nu_12 * A1 * density1 * (velocity2 - velocity1);
@@ -315,7 +315,7 @@ void Collisions::transform(Options& state) {
     const Field3D temperature1 =
         species1.isSet("temperature")
             ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
-            : 0.0;
+      : Field3D{0.0};
 
     const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]) * Nnorm;
 
@@ -342,7 +342,7 @@ void Collisions::transform(Options& state) {
         const Field3D temperature2 =
             species2.isSet("temperature")
                 ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
-                : 0.0;
+	  : Field3D{0.0};
 
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
 
@@ -428,7 +428,7 @@ void Collisions::transform(Options& state) {
         const Field3D temperature2 =
             species2.isSet("temperature")
                 ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
-                : 0.0;
+	  : Field3D{0.0};
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
 

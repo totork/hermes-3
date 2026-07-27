@@ -2,6 +2,11 @@
 #ifndef EVOLVE_TRACEDENSITY_H
 #define EVOLVE_TRACEDENSITY_H
 
+#include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
+#include <bout/solver.hxx>
+
+
 #include "component.hxx"
 
 

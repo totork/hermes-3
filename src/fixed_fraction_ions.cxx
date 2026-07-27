@@ -1,5 +1,6 @@
 
 #include "../include/fixed_fraction_ions.hxx"
+#include <bout/mesh.hxx>
 
 FixedFractionIons::FixedFractionIons(std::string name, Options &alloptions,
                                      Solver *UNUSED(solver)) {

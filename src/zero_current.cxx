@@ -2,7 +2,7 @@
 #include <bout/difops.hxx>
 
 #include "../include/zero_current.hxx"
-
+#include <bout/mesh.hxx>
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : name(name) {
   Options &options = alloptions[name];

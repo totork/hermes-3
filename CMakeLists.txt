@@ -58,12 +58,12 @@ set(HERMES_SOURCES
     src/div_ops.cxx
     src/fci_gridcheck.cxx
     src/neutral_mixed.cxx
-    src/neutral_full_velocity_curv.cxx
+    #src/neutral_full_velocity_curv.cxx
     src/full_velocity.cxx
     src/electromagnetic.cxx
-    src/electron_force_balance.cxx
+    #src/electron_force_balance.cxx
     src/electron_viscosity.cxx
-    src/core_sources.cxx
+    #src/core_sources.cxx
     src/evolve_density.cxx
     src/evolve_tracedensity.cxx
     src/evolve_energy.cxx
@@ -76,10 +76,10 @@ set(HERMES_SOURCES
     src/diamagnetic_drift_fci.cxx
     src/recalculate_metric.cxx
     src/relax_potential.cxx
-    src/sheath_closure.cxx
+    #src/sheath_closure.cxx
     src/sheath_boundary.cxx
     src/sheath_boundary_parallel.cxx
-    src/sheath_boundary_simple.cxx
+    #src/sheath_boundary_simple.cxx
     src/sheath_boundary_insulating.cxx
     src/snb_conduction.cxx
     src/fixed_fraction_ions.cxx
@@ -89,7 +89,7 @@ set(HERMES_SOURCES
     src/anomalous_diffusion.cxx
     src/anomalous_diffusion_3d.cxx
     src/binormal_stpm.cxx
-    src/kmodel.cxx
+    #src/kmodel.cxx
     src/recycling.cxx
     src/recycling_fci.cxx
     src/amjuel_hyd_ionisation.cxx
@@ -110,7 +110,7 @@ set(HERMES_SOURCES
     src/ion_viscosity.cxx
     src/transform.cxx
     src/vorticity.cxx
-    src/yboundary_regions.cxx
+    #src/yboundary_regions.cxx
     include/adas_reaction.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
@@ -126,15 +126,15 @@ set(HERMES_SOURCES
     include/collisions.hxx
     include/component.hxx
     include/adhoc_potential.hxx
-    include/kmodel.hxx
+    #include/kmodel.hxx
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/diamagnetic_drift_fci.hxx
     include/div_ops.hxx
     include/electromagnetic.hxx
-    include/electron_force_balance.hxx
+    #include/electron_force_balance.hxx
     include/electron_viscosity.hxx
-    include/core_sources.hxx
+    #include/core_sources.hxx
     include/evolve_density.hxx
     include/evolve_tracedensity.hxx
     include/evolve_energy.hxx
@@ -152,7 +152,7 @@ set(HERMES_SOURCES
     include/ionisation.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
-    include/neutral_full_velocity_curv.hxx
+    #include/neutral_full_velocity_curv.hxx
     include/neutral_parallel_diffusion.hxx
     include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx
@@ -165,7 +165,7 @@ set(HERMES_SOURCES
     include/relax_potential.hxx
     include/sheath_boundary.hxx
     include/sheath_boundary_parallel.hxx
-    include/sheath_boundary_simple.hxx
+    #include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
     include/simple_conduction.hxx
     include/snb_conduction.hxx

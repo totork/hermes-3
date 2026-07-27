@@ -2,6 +2,11 @@
 #ifndef EVOLVE_DENSITY_H
 #define EVOLVE_DENSITY_H
 
+#include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
+#include <bout/solver.hxx>
+
+
 #include "component.hxx"
 
 /// Evolve species density in time

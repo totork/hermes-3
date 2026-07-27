@@ -3,6 +3,10 @@
 #define EVOLVE_PRESSURE_H
 
 #include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
+#include <bout/solver.hxx>
+
+
 #include <bout/yboundary_regions.hxx>
 
 #include "../include/hermes_utils.hxx"
@@ -122,7 +126,7 @@ private:
   bool source_time_dependent; ///< Is the input source time dependent?
   Field3D flow_xlow, flow_ylow; ///< Energy flow diagnostics
 
-  YBoundary yboundary;
+
   Field3D flow_ylow_conduction; ///< Conduction energy flow diagnostics
   Field3D flow_ylow_kinetic;    ///< Parallel flow of kinetic energy
   Field3D T_up, T_down;

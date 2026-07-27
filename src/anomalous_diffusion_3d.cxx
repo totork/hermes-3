@@ -174,9 +174,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
       add(species["momentum_source"],
           Div_a_Grad_perp_curv(anomalous_nu * AA * N, V));
     } else {
-      add(species["momentum_source"],
-	  setName((*dagp)(anomalous_nu * AA * N, V, flow_xlow, flow_zlow, upwind),
-		  "dagp_fv(anomalous_nu * AA * N{}, V{}", name, name));
+      add(species["momentum_source"], (*dagp)(anomalous_nu * AA * N, V, flow_xlow, flow_zlow, upwind));
       add(species["momentum_flow_xlow"], flow_xlow);
       add(species["momentum_flow_zlow"], flow_zlow);
     }

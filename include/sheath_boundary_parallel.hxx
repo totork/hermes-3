@@ -106,10 +106,8 @@ private:
     }
     return ::toFieldAligned(f);
   }
-  template <class F>
-  void iter_regions(const F& f) {
-    yboundary.iter_regions(f);
-  }
+
+  
 };
 
 namespace {

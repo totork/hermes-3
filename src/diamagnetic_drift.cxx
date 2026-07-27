@@ -12,7 +12,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   // Get options for this component
   auto& options = alloptions[name];
 
-  yboundary.init(options);
+
 
   bndry_flux =
       options["bndry_flux"].doc("Allow fluxes through boundary?").withDefault<bool>(true);
@@ -61,11 +61,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.
-  yboundary.iter_regions([&](auto& region) {
-    for (auto& pnt : region) {
-      pnt.ynext(Curlb_B.y) = -Curlb_B.y[pnt.ind()];
-    }
-  });
+
 }
 
 void DiamagneticDrift::transform(Options& state) {

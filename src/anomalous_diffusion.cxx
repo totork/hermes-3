@@ -103,13 +103,15 @@ void AnomalousDiffusion::transform(Options& state) {
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"], Div_a_Grad_perp_upwind_flows(AA * V2D * anomalous_D, N2D,
+    Field2D tmp1 = AA * V2D * anomalous_D;
+    add(species["momentum_source"], Div_a_Grad_perp_upwind_flows(tmp1, N2D,
                                                                  flow_xlow, flow_ylow));
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
 
+    Field2D tmp2 = (3. / 2) * T2D * anomalous_D;
     add(species["energy_source"],
-        Div_a_Grad_perp_upwind_flows((3. / 2) * T2D * anomalous_D, N2D,
+        Div_a_Grad_perp_upwind_flows(tmp2, N2D,
                                      flow_xlow, flow_ylow));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
@@ -117,7 +119,8 @@ void AnomalousDiffusion::transform(Options& state) {
 
   if (include_chi) {
     // Gradients in temperature that drive energy flows
-    add(species["energy_source"], Div_a_Grad_perp_upwind_flows(anomalous_chi * N2D, T2D, flow_xlow, flow_ylow));
+    Field2D tmp = anomalous_chi * N2D;
+    add(species["energy_source"], Div_a_Grad_perp_upwind_flows(tmp, T2D, flow_xlow, flow_ylow));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
   }
@@ -125,7 +128,8 @@ void AnomalousDiffusion::transform(Options& state) {
   if (include_nu) {
     // Gradients in flow speed that drive momentum flows
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"], Div_a_Grad_perp_upwind_flows(anomalous_nu * AA * N2D, V2D, flow_xlow, flow_ylow));
+    Field2D tmp = anomalous_nu * AA * N2D;
+    add(species["momentum_source"], Div_a_Grad_perp_upwind_flows(tmp, V2D, flow_xlow, flow_ylow));
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
   }

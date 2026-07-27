@@ -254,6 +254,12 @@ Options& set(Options& option, T value) {
   return option;
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) set(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return set(option, ResT{f});
+}
+
+
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
 ///
@@ -274,6 +280,13 @@ Options& setBoundary(Options& option, T value) {
   option.force(std::move(value));
   return option;
 }
+
+
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) setBoundary(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return setBoundary(option, ResT{f});
+}
+
 
 /// Add value to a given option. If not already set, treats
 /// as zero and sets the option to the value.
@@ -300,6 +313,12 @@ Options& add(Options& option, T value) {
   }
 }
 
+
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) add(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return add(option, ResT{f});
+}
+
 /// Subtract value froma a given option. If not already set, treats
 /// as zero and sets the option to the negative value.
 ///
@@ -323,6 +342,12 @@ Options& subtract(Options& option, T value) {
   }
 }
 
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) subtract(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
+  return subtract(option, ResT{f});
+}
+
+
 template<typename T>
 void set_with_attrs(Options& option, T value, std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   option.force(value);
@@ -339,5 +364,12 @@ inline void set_with_attrs(Options& option, Field3D value, std::initializer_list
   option.setAttributes(attrs);
 }
 #endif
+
+template <typename ResT, typename L, typename R, typename Func>
+inline void set_with_attrs(
+    Options& option, const BinaryExpr<ResT, L, R, Func>& f,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  set_with_attrs(option, ResT{f}, attrs);
+}
 
 #endif // HERMES_COMPONENT_H

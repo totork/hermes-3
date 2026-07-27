@@ -11,16 +11,14 @@
 
 using bout::globals::mesh;
 
-Recycling::Recycling(std::string name, Options& alloptions, Solver*) {
+Recycling::Recycling(std::string name, Options& alloptions, Solver*)
+  : yboundary(YBndryType::all, nullptr, *mesh) {
 
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
 
   Options& options = alloptions[name];
 
-  // init parallel bc iterator
-  yboundary.init(options);
- 
   auto species_list = strsplit(options["species"]
                                    .doc("Comma-separated list of species to recycle")
                                    .as<std::string>(),
@@ -228,29 +226,29 @@ void Recycling::transform(Options& state) {
       channel.target_recycle_energy_source = 0;
       
       // Y boundaries
-      yboundary.iter_pnts([&](auto& pnt) {
-	BoutReal flux = pnt.dir * pnt.interpolate_sheath_o1(N) * pnt.interpolate_sheath_o1(V);
+      yboundary.iter([&](auto& pnt) {
+	BoutReal flux = pnt.dir() * pnt.interpolate_boundary_o2(N) * pnt.interpolate_boundary_o2(V);
 	if (flux < 0.0) {
 	  flux = 0.0;
 	}
 	
-	BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_sheath_o1(J) / sqrt(pnt.interpolate_sheath_o1(g_22)) * pnt.interpolate_sheath_o1(dx) * pnt.interpolate_sheath_o1(dz);
+	BoutReal flow = channel.target_multiplier * flux * pnt.interpolate_boundary_o2(J) / sqrt(pnt.interpolate_boundary_o2(g_22)) * pnt.interpolate_boundary_o2(dx) * pnt.interpolate_boundary_o2(dz);
 
-	BoutReal volume  = pnt.ythis(J) * pnt.ythis(dx) * pnt.ythis(dy) * pnt.ythis(dz);
+	BoutReal volume  = pnt.current(J) * pnt.current(dx) * pnt.current(dy) * pnt.current(dz);
 
 	// Calculate sources in the final cell [m^-3 s^-1]
-	if (pnt.abs_offset() == 1){
-	  pnt.ythis(channel.target_recycle_density_source) += flow / volume;    // For diagnostic
-	  pnt.ythis(density_source) += flow / volume;         // For use in solver
+	if (abs(pnt.offset()) == 1){
+	  pnt.current(channel.target_recycle_density_source) += flow / volume;    // For diagnostic
+	  pnt.current(density_source) += flow / volume;         // For use in solver
 	}
 	
 	// Energy of recycled particles
 	BoutReal ion_energy_flow = 0.0;
 	if (eflow_is_set) {
-	  if (pnt.dir < 0.) {
-	    ion_energy_flow = pnt.ythis(energy_flow_ylow) * pnt.dir;   // This is ylow end so take first domain cell and flip sign
+	  if (pnt.dir() < 0.) {
+	    ion_energy_flow = pnt.current(energy_flow_ylow) * pnt.dir();   // This is ylow end so take first domain cell and flip sign
 	  } else {
-	    ion_energy_flow = pnt.ynext(energy_flow_ylow); // Ion heat flow to wall in [W]. This is yup end so take guard cell
+	    ion_energy_flow = pnt.next(energy_flow_ylow); // Ion heat flow to wall in [W]. This is yup end so take guard cell
 	  }
 	}
 	
@@ -262,9 +260,9 @@ void Recycling::transform(Options& state) {
 	
 
 	// Divide heat flow in [W] by cell volume to get source in [m^-3 s^-1]
-	if (pnt.abs_offset() == 1) {
-	  pnt.ythis(channel.target_recycle_energy_source) += recycle_energy_flow / volume;
-	  pnt.ythis(energy_source) += recycle_energy_flow / volume;
+	if (abs(pnt.offset()) == 1) {
+	  pnt.current(channel.target_recycle_energy_source) += recycle_energy_flow / volume;
+	  pnt.current(energy_source) += recycle_energy_flow / volume;
 	}
 	  
       }); // end yboundary.iter_pnts()

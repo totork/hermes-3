@@ -5,6 +5,7 @@
 #include <bout/difops.hxx>
 #include <bout/output_bout_types.hxx>
 #include <bout/mesh.hxx>
+#include <bout/vecops.hxx>
 
 #include "../include/ion_viscosity.hxx"
 #include "../include/div_ops.hxx"
@@ -121,7 +122,7 @@ void IonViscosity::transform(Options &state) {
     // This term is the parallel flow part of
     // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
     Field3D dummy;
-    const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, true);
+    const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_H3(eta / Bxy, sqrtB * V, dummy, true);
 
     add(species["momentum_source"], div_Pi_cipar);
     if (heating) {

@@ -5,8 +5,6 @@
 #include <bout/vectormetric.hxx>
 
 #include "component.hxx"
-#include <bout/yboundary_regions.hxx>
-
 
 /// Evolve vorticity and potential in time.
 ///
@@ -76,7 +74,6 @@ private:
   
   bool sheath_parallel;
 
-  YBoundary yboundary;
   bool core_dissipation;
   bool disable_ddt_Vort, disable_ddt_phi1;
 

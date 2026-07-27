@@ -49,8 +49,8 @@ CoreSources::CoreSources(std::string name, Options& alloptions, Solver*) {
 
   Coordinates* coord = mesh->getCoordinates();
 
-  Field3D cellcross_x = coord->cellvolume / (coord->dx * sqrt(coord->g_11));
-  Field3D cellcross_z = coord->cellvolume / (coord->dz * sqrt(coord->g_33));
+  Field3D cellcross_x = coord->cell_volume() / (coord->dx * sqrt(coord->g_11));
+  Field3D cellcross_z = coord->cell_volume() / (coord->dz * sqrt(coord->g_33));
   
   if (mesh->firstX()) {
     for (int i = mesh->xstart - 2; i >= 0; --i) {
@@ -58,8 +58,8 @@ CoreSources::CoreSources(std::string name, Options& alloptions, Solver*) {
         for (int k = 0; k < mesh->LocalNz; ++k) {
 	  BoutReal cellarea_xdown = 0.5 * (cellcross_x(mesh->xstart, j, k) + cellcross_x(mesh->xstart, j, k));
 	  
-	  source_density(mesh->xstart, j, k) = particlefluxdensity * cellarea_xdown / coord->cellvolume(mesh->xstart, j, k);
-	  source_pressure(mesh->xstart, j, k) = powerfluxdensity * cellarea_xdown / coord->cellvolume(mesh->xstart, j, k);
+	  source_density(mesh->xstart, j, k) = particlefluxdensity * cellarea_xdown / coord->cell_volume()(mesh->xstart, j, k);
+	  source_pressure(mesh->xstart, j, k) = powerfluxdensity * cellarea_xdown / coord->cell_volume()(mesh->xstart, j, k);
         }
       }
     }

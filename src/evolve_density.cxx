@@ -135,37 +135,12 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   disable_ddt = n_options["disable_ddt"]
     .withDefault<bool>(false);
   
-  // If time dependent, parse the function with respect to time from the input file
-  if (source_time_dependent) {
-    auto str = n_options["source_prefactor"]
-      .doc("Time-dependent function of multiplier on ddt(N" + name + std::string(") source."))
-      .as<std::string>();
-      source_prefactor_function = FieldFactory::get()->parse(str, &n_options);
-  }
-
-  // Putting source at first X index would put it in both PFR in core, this ensures only core
-  if (source_only_in_core) {
-    for (int x = mesh->xstart; x <= mesh->xend; x++) {
-      if (!mesh->periodicY(x)) {
-        // Not periodic, so not in core
-        for (int y = mesh->ystart; y <= mesh->yend; y++) {
-          for (int z = mesh->zstart; z <= mesh->zend; z++) {
-            source(x, y, z) = 0.0;
-          }
-        }
-      }
-    }
-  }
-
-  neumann_boundary_average_z = alloptions[std::string("N") + name]["neumann_boundary_average_z"]
-    .doc("Apply neumann boundary with Z average?")
-    .withDefault<bool>(false);
 
   if (mesh->isFci()) {
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     // Clebsch coordinate system
     bracket_factor = 1.0;
@@ -183,40 +158,6 @@ void EvolveDensity::transform(Options& state) {
   N.applyBoundary();
   mesh->communicate(N);
   N.applyParallelBoundary();
-
-  if (neumann_boundary_average_z) {
-    // Take Z (usually toroidal) average and apply as X (radial) boundary condition
-    if (mesh->firstX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal Navg = 0.0; // Average N in Z
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          Navg += N(mesh->xstart, j, k);
-        }
-        Navg /= mesh->LocalNz;
-
-        // Apply boundary condition
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          N(mesh->xstart - 1, j, k) = 2. * Navg - N(mesh->xstart, j, k);
-          N(mesh->xstart - 2, j, k) = N(mesh->xstart - 1, j, k);
-        }
-      }
-    }
-
-    if (mesh->lastX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal Navg = 0.0; // Average N in Z
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          Navg += N(mesh->xend, j, k);
-        }
-        Navg /= mesh->LocalNz;
-
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          N(mesh->xend + 1, j, k) = 2. * Navg - N(mesh->xend, j, k);
-          N(mesh->xend + 2, j, k) = N(mesh->xend + 1, j, k);
-        }
-      }
-    }
-  }
 
   auto& species = state["species"][name];
   set(species["density"], floor(N, 0.0)); // Density in state always >= 0
@@ -240,12 +181,7 @@ void EvolveDensity::transform(Options& state) {
   // The particle source needs to be known in other components
   // (e.g when electromagnetic terms are enabled)
   // So evaluate them here rather than in finally()
-  if (source_time_dependent) {
-    // Evaluate the source_prefactor function at the current time in seconds and scale source with it
-    BoutReal time = get<BoutReal>(state["time"]);
-    BoutReal source_prefactor = source_prefactor_function ->generate(bout::generator::Context().set("x",0,"y",0,"z",0,"t",time*time_normalisation));
-    final_source = source * source_prefactor;
-  } else if (adapt_source > 0.0) {
+  if (adapt_source > 0.0) {
     final_source = adaptive_sourceterm(N ,source, adapt_source, 0.02);
   } else {
     final_source = source;
@@ -296,7 +232,7 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
     flow_ylow = 0.0;
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par);
+    ddt(N) -= FV::Div_par_H3(N, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par);
     
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term

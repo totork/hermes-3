@@ -4,6 +4,7 @@
 #include <bout/difops.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include "../include/div_ops.hxx"
 #include "../include/hermes_build_config.hxx"
@@ -37,7 +38,7 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_NOBND
 
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
-    : name(name) {
+  : name(name), yboundary(YBndryType::all, nullptr, *mesh) {
 
   // Normalisations
   const Options& units = alloptions["units"];
@@ -51,7 +52,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   ASSERT0(mesh->xstart > 0);
 
   auto& options = alloptions[name];
-  yboundary.init(options);
+
   
   // Evolving variables e.g name is "h" or "h+"
   solver->add(Nn, std::string("N") + name);
@@ -252,6 +253,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   if (Nn.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
   }
+
+
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -307,9 +310,9 @@ void NeutralMixed::transform(Options& state) {
   // Parallel boundary conditions
   if (!isMMS && parallel_dirichlet) {
     TRACE("Neutral boundary conditions");
-    yboundary.iter_pnts([&](auto& pnt) {
+    yboundary.iter([&](auto& pnt) {
       // Free boundary (constant gradient) density
-      pnt.dirichlet_o2(Nn, pnt.extrapolate_sheath_o2(Nn));
+      pnt.dirichlet_o2(Nn, pnt.extrapolate_next_o2(Nn));
 
       // Zero gradient temperature, heat flux added later
       pnt.neumann_o2(Tn,0.0);
@@ -466,7 +469,7 @@ void NeutralMixed::finally(const Options& state) {
   DnnNVn = Dnn * Nnlim * Vn;
 
   if (!isMMS && parallel_dirichlet) {
-    yboundary.iter_pnts([&](auto& pnt) {
+    yboundary.iter([&](auto& pnt) {
       pnt.dirichlet_o2(Dnn, 0.0);
       pnt.dirichlet_o2(DnnPn, 0.0);
       pnt.dirichlet_o2(DnnNn, 0.0);
@@ -504,7 +507,7 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral density
   TRACE("Neutral density");
   if (!isMMS){
-    ddt(Nn) = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
+    ddt(Nn) = -FV::Div_par_H3(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
   } else {
     ddt(Nn) = -Div_par(Nn * Vn);
   }
@@ -552,7 +555,7 @@ void NeutralMixed::finally(const Options& state) {
     Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
 
     if (!isMMS) {
-      ddt(Pn) = - FV::Div_par_mod<hermes::Limiter>(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
+      ddt(Pn) = - FV::Div_par_H3(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
     } else {
       ddt(Pn) = - Div_par(e_plus_p * Vn);
     }
@@ -576,7 +579,7 @@ void NeutralMixed::finally(const Options& state) {
     //ef_adv_perp_ylow *= 5/2;
 
     if (neutral_conduction) {
-      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_H3(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
     
       if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
 	ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
@@ -595,7 +598,7 @@ void NeutralMixed::finally(const Options& state) {
     }
 
     if (include_cond) {
-      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(anomalous_conduction * Nn, Tn, ef_cond_par_ylow, false);
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_H3(anomalous_conduction * Nn, Tn, ef_cond_par_ylow, false);
       bool upwind = false;
       ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction * Nn, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
     }
@@ -621,7 +624,7 @@ void NeutralMixed::finally(const Options& state) {
 
     TRACE("Neutral momentum");
     if (!isMMS) {
-      ddt(NVn) = -AA * FV::Div_par_fvv<hermes::Limiter>(Nnlim, Vn, sound_speed);             // Momentum flow
+      ddt(NVn) = -AA * FV::Div_par_fvv_H3(Nnlim, Vn, sound_speed);             // Momentum flow
     } else {
       ddt(NVn) = -Div_par(NVn * Vn);
     }
@@ -649,7 +652,7 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = Div_par_K_Grad_par_mod(eta_n , Vn , mf_visc_par_ylow , false); // Parallel viscosity
+      Field3D viscosity_source = Div_par_K_Grad_par_H3(eta_n , Vn , mf_visc_par_ylow , false); // Parallel viscosity
       
       if (!NVn.isFci()) {                                                                     // Perpendicular advection                                                                                          
 	viscosity_source += Div_a_Grad_perp_flows(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow);
