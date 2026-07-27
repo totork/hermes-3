@@ -30,7 +30,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   auto& options = alloptions[name];
 
-  mode_div_par = options["mode_div_par"]
+  mode_div_par_fvv = options["mode_div_par_fvv"]
                    .doc("Which mode to use for the parallel divergence. 0 is the standard mode, 1 is with slope limiter.")
                    .withDefault<int>(0);
   
@@ -250,7 +250,7 @@ void EvolveMomentum::finally(const Options &state) {
     Field3D NVV = NV * V;
     ddt(NV) -= Div_par(NVV);
   } else {
-    ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux, mode_div_par);
+    ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux, mode_div_par_fvv);
   }
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
