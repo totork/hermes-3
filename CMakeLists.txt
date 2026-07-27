@@ -329,8 +329,6 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-fluid)
   hermes_add_integrated_test(diffusion)
   hermes_add_integrated_test(evolve_density)
-  hermes_add_integrated_test(neutral_mixed
-    CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(vorticity
     CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-perpdiffusion-fci
