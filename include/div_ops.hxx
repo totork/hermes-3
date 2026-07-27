@@ -730,11 +730,19 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 	  flux_up += (f_in[i] * amax - f_up[iyp] * amax) * coord->cellarea_yup[i];
 	  flux_down += (- f_in[i] * amax + f_down[iym] * amax) * coord->cellarea_ydown[i];
 	}
+
+	if (coord->has_bndry_yup[i] == true) {
+	  flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
+	}
+	if (coord->has_bndry_ydown[i] == true) {
+	  flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
+	}
 			     
 	
       } else {
 	throw BoutException("No mode chosen for parallel divergence!");  
       }
+      
       result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
 
 		 
