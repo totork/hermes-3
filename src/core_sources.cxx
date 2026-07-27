@@ -72,7 +72,6 @@ CoreSources::CoreSources(std::string name, Options& alloptions, Solver*) {
 
 
 void CoreSources::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& allspecies = state["species"];
   
@@ -127,7 +126,6 @@ void CoreSources::transform(Options& state) {
 }
 
 void CoreSources::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);

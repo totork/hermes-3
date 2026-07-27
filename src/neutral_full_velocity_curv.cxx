@@ -16,7 +16,6 @@ using ParLimiter = FV::Upwind;
 
 NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Options& alloptions, Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   // Normalisations
   const Options& units = alloptions["units"];
@@ -245,7 +244,6 @@ NeutralFullVelocityCurv::NeutralFullVelocityCurv(const std::string& name, Option
 }
 
 void NeutralFullVelocityCurv::transform(Options& state) {
-  AUTO_TRACE();
 
   Nn.applyBoundary();
   mesh->communicate(Nn);
@@ -343,7 +341,6 @@ void NeutralFullVelocityCurv::transform(Options& state) {
 }
 
 void NeutralFullVelocityCurv::finally(const Options& state) {
-  AUTO_TRACE();
   auto& localstate = state["species"][name];
 
   logPnlim = log(Pnlim);

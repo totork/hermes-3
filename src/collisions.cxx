@@ -14,7 +14,6 @@ BoutReal floor(BoutReal value, BoutReal min) {
 } // namespace
 
 Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
-  AUTO_TRACE();
   const Options& units = alloptions["units"];
 
   // Normalisations
@@ -78,7 +77,6 @@ Collisions::Collisions(std::string name, Options& alloptions, Solver*) {
 /// Note: A* variables are used for atomic mass numbers;
 ///       mass* variables are species masses in kg
 void Collisions::collide(Options& species1, Options& species2, const Field3D& nu_12, BoutReal momentum_coefficient, BoutReal momfac, BoutReal enfac) {
-  AUTO_TRACE();
 
   add(species1["collision_frequency"], nu_12);
   set(collision_rates[species1.name()][species2.name()], nu_12);
@@ -161,7 +159,6 @@ void Collisions::collide(Options& species1, Options& species2, const Field3D& nu
 }
 
 void Collisions::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& allspecies = state["species"];
 
@@ -492,7 +489,6 @@ void Collisions::transform(Options& state) {
 }
 
 void Collisions::outputVars(Options& state) {
-  AUTO_TRACE();
 
   if (!diagnose) {
     return; // Don't save diagnostics

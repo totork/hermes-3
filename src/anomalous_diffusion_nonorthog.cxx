@@ -53,7 +53,6 @@ AnomalousDiffusionNonorthog::AnomalousDiffusionNonorthog(std::string name, Optio
 }
 
 void AnomalousDiffusionNonorthog::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& species = state["species"][name];
 
@@ -120,14 +119,12 @@ void AnomalousDiffusionNonorthog::transform(Options& state) {
 }
 
 void AnomalousDiffusionNonorthog::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   if (diagnose) {
 
-      AUTO_TRACE();
       // Save particle, momentum and energy channels
 
       set_with_attrs(state[{std::string("anomalous_D_") + name}], anomalous_D,

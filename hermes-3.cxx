@@ -459,7 +459,6 @@ int Hermes::precon(BoutReal t, BoutReal gamma, BoutReal UNUSED(delta)) {
 }
 
 void Hermes::outputVars(Options& options) {
-  AUTO_TRACE();
   Coordinates *coord = mesh->getCoordinates();
 
   // Save the Hermes version in the output dump files
@@ -521,7 +520,6 @@ void Hermes::outputVars(Options& options) {
 }
 
 void Hermes::restartVars(Options& options) {
-  AUTO_TRACE();
 
   set_with_attrs(options["Tnorm"], Tnorm, {
       {"units", "eV"},

@@ -5,7 +5,6 @@
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : name(name) {
-  AUTO_TRACE();
   Options &options = alloptions[name];
 
   charge = options["charge"].doc("Particle charge. electrons = -1");
@@ -14,7 +13,6 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
 }
 
 void ZeroCurrent::transform(Options &state) {
-  AUTO_TRACE();
 
   // Current due to other species
   Field3D current;
@@ -66,7 +64,6 @@ void ZeroCurrent::transform(Options &state) {
 }
 
 void ZeroCurrent::outputVars(Options &state) {
-  AUTO_TRACE();
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   // Save the velocity

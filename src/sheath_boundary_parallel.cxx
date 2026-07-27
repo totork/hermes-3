@@ -48,7 +48,6 @@ BoutReal smooth_step(BoutReal x, BoutReal f1, BoutReal f2) {
 
 extern Options* tracking;
 SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &alloptions, Solver *) {
-  AUTO_TRACE();
   
   Options &options = alloptions[name];
 
@@ -122,7 +121,6 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
 }
 
 void SheathBoundaryParallel::transform(Options &state) {
-  AUTO_TRACE();
 
   Options& allspecies = state["species"];
   Options& electrons = allspecies["e"];

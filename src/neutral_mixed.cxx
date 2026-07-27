@@ -38,7 +38,6 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_NOBND
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   // Normalisations
   const Options& units = alloptions["units"];
@@ -256,7 +255,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 }
 
 void NeutralMixed::transform(Options& state) {
-  AUTO_TRACE();
 
   Nn.applyBoundary();
   NVn.applyBoundary();
@@ -349,7 +347,6 @@ void NeutralMixed::transform(Options& state) {
 }
 
 void NeutralMixed::finally(const Options& state) {
-  AUTO_TRACE();
   auto& localstate = state["species"][name];
 
   // Logarithms used to calculate perpendicular velocity

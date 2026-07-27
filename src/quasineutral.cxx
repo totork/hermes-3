@@ -16,7 +16,6 @@ Quasineutral::Quasineutral(std::string name, Options &alloptions,
 }
 
 void Quasineutral::transform(Options &state) {
-  AUTO_TRACE();
   // Iterate through all subsections
   Options &allspecies = state["species"];
 
@@ -57,7 +56,6 @@ void Quasineutral::finally(const Options &state) {
 }
 
 void Quasineutral::outputVars(Options &state) {
-  AUTO_TRACE();
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
   // Save the density

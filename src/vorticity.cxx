@@ -26,7 +26,6 @@ Ind3D indexAt(const Field3D& f, int x, int y, int z) {
 }
 
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
-  AUTO_TRACE();
 
   solver->add(Vort, "Vort");
 
@@ -276,7 +275,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver) {
 }
 
 void Vorticity::transform(Options& state) {
-  AUTO_TRACE();
 
   phi.name = "phi";
   auto& fields = state["fields"];
@@ -715,7 +713,6 @@ void Vorticity::transform(Options& state) {
 }
 
 void Vorticity::finally(const Options& state) {
-  AUTO_TRACE();
   auto coord = mesh->getCoordinates();
 
   phi = get<Field3D>(state["fields"]["phi"]);
@@ -867,7 +864,6 @@ void Vorticity::finally(const Options& state) {
 }
 
 void Vorticity::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

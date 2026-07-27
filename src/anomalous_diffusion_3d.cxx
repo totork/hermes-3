@@ -83,7 +83,6 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
 }
 
 void AnomalousDiffusion3D::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& species = state["species"][name];
 
@@ -188,7 +187,6 @@ void AnomalousDiffusion3D::transform(Options& state) {
 }
 
 void AnomalousDiffusion3D::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -198,7 +196,6 @@ void AnomalousDiffusion3D::outputVars(Options& state) {
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   if (diagnose) {
-      AUTO_TRACE();
       // Save particle, momentum and energy channels
       if (include_chi) {
 	set_with_attrs(state[std::string("TE_P") + name + std::string("_perpconduction")], TE_conduction,

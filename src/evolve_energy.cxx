@@ -16,7 +16,6 @@ using bout::globals::mesh;
 
 EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   auto& options = alloptions[name];
 
@@ -136,7 +135,6 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
 }
 
 void EvolveEnergy::transform(Options& state) {
-  AUTO_TRACE();
 
   if (evolve_log) {
     // Evolving logE, but most calculations use E
@@ -203,7 +201,6 @@ void EvolveEnergy::transform(Options& state) {
 }
 
 void EvolveEnergy::finally(const Options& state) {
-  AUTO_TRACE();
 
   /// Get the section containing this species
   const auto& species = state["species"][name];
@@ -413,7 +410,6 @@ void EvolveEnergy::finally(const Options& state) {
 }
 
 void EvolveEnergy::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

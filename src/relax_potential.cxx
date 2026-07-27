@@ -10,7 +10,6 @@ using bout::globals::mesh;
 
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver) {
-  AUTO_TRACE();
 
   auto* coord = mesh->getCoordinates();
 
@@ -196,7 +195,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 }
 
 void RelaxPotential::transform(Options& state) {
-  AUTO_TRACE();
 
   // Scale potential
   
@@ -333,7 +331,6 @@ void RelaxPotential::transform(Options& state) {
 }
 
 void RelaxPotential::finally(const Options& state) {
-  AUTO_TRACE();
 
   const Options& allspecies = state["species"];
 
@@ -480,7 +477,6 @@ void RelaxPotential::finally(const Options& state) {
 }
 
 void RelaxPotential::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
 

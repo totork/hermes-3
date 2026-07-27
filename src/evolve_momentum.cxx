@@ -23,7 +23,6 @@ Options * tracking{nullptr};
 
 EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) :
   name(name), Vname(fmt::format("V{}", name)) {
-  AUTO_TRACE();
   
   // Evolve the momentum in time
   solver->add(NV, std::string("NV") + name);
@@ -112,7 +111,6 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 }
 
 void EvolveMomentum::transform(Options &state) {
-  AUTO_TRACE();
 
   tracking = ddt(NV).getTracking();
   auto& species = state["species"][name];
@@ -154,7 +152,6 @@ void EvolveMomentum::transform(Options &state) {
 }
 
 void EvolveMomentum::finally(const Options &state) {
-  AUTO_TRACE();
 
   auto& species = state["species"][name];
   BoutReal AA = get<BoutReal>(species["AA"]);
@@ -342,7 +339,6 @@ void EvolveMomentum::finally(const Options &state) {
 }
 
 void EvolveMomentum::outputVars(Options &state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
