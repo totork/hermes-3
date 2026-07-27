@@ -61,6 +61,7 @@ private:
   bool exponential_source;
   BoutReal flux_limit; ///< Diffusive flux limit
   bool LP_limit;
+  bool limit_length;
   BoutReal LP_speed;
   Field3D lambdaLP;
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
