@@ -276,21 +276,25 @@ int Hermes::init(bool restarting) {
 	coord->g_13 /= SQ(rho_s0);
 	coord->g_23 /= SQ(rho_s0);
 
-	coord->Bxy /= Bnorm;
-	
-	
-        BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOBNDRY")) {
-          if (fabs(coord->Bxy.yup()[i]) < 1e-3) {
-            coord->Bxy.yup()[i] = coord->Bxy[i];
-          }
-          if (fabs(coord->Bxy.ydown()[i]) < 1e-3) {
-            coord->Bxy.ydown()[i] = coord->Bxy[i];
-          }
-        }
 
+	Field3D tmp_Bxy = 0.0;
+	tmp_Bxy.applyBoundary("neumann");
+	mesh->communicate(tmp_Bxy);
+	tmp_Bxy.applyParallelBoundary("parallel_neumann_o1");
 	
+	BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOY")) {
+
+	  const auto iyp = i.yp();
+	  const auto iym = i.ym();
+	  
+	  tmp_Bxy[i] = coord->Bxy[i] / Bnorm;
+	  tmp_Bxy.yup()[iyp] = coord->Bxy.yup()[iyp] / Bnorm;
+	  tmp_Bxy.ydown()[iym] = coord->Bxy.ydown()[iym] / Bnorm;
+		    	  
+	}
 	
-	
+	coord->Bxy = tmp_Bxy;
+	ASSERT2(coord->Bxy.hasParallelSlices());
 	
       } else { // NOT FCI
 	coord->dx /= rho_s0 * rho_s0 * Bnorm;
@@ -313,6 +317,8 @@ int Hermes::init(bool restarting) {
 	coord->g_23 /= SQ(rho_s0);
       }
       coord->geometry(); // Calculate other metrics
+
+
     }
   }
 

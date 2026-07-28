@@ -108,6 +108,9 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   disable_ddt = nv_options["disable_ddt"]
     .withDefault<bool>(false);
 
+  Nlim.setBoundary(std::string("N") + name);
+
+  
 }
 
 void EvolveMomentum::transform(Options &state) {
@@ -117,7 +120,11 @@ void EvolveMomentum::transform(Options &state) {
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
-  Field3D Nlim = floor(N, density_floor);
+  Nlim = floor(N, density_floor);
+  Nlim.applyBoundary();
+  mesh->communicate(Nlim);
+  Nlim.applyParallelBoundary();
+  
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   NV.applyBoundary();
@@ -136,6 +143,10 @@ void EvolveMomentum::transform(Options &state) {
 
   // Note: Now NV and NV_solver will differ when N < density_floor
   NV_err = NV - NV_solver;
+
+  NV.applyBoundary();
+  mesh->communicate(NV);
+  NV.applyParallelBoundary();
   set(species["momentum"], NV);
 }
 
@@ -151,8 +162,11 @@ void EvolveMomentum::finally(const Options &state) {
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  Field3D Nlim = floor(N, density_floor);
-
+  Nlim = floor(N, density_floor);
+  Nlim.applyBoundary();
+  mesh->communicate(Nlim);
+  Nlim.applyParallelBoundary();
+  
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
   if (state.isSet("fastest_wave")) {
@@ -233,7 +247,8 @@ void EvolveMomentum::finally(const Options &state) {
 
   if (isMMS) {
     Field3D NVV = NV * V;
-    ddt(NV) -= Div_par(NVV);
+    mesh->communicate(NVV);
+    ddt(NV) -= FV::Div_par(NVV);
   } else {
     ddt(NV) -= AA * FV::Div_par_fvv_H3(Nlim, V, fastest_wave, fix_momentum_boundary_flux, mode_div_par_fvv);
   }

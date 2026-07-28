@@ -253,6 +253,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
     tau_1 = (Cs0 / Lnorm ) * tau_0;    
   }
+
+  Pfloor.setBoundary(std::string("P") + name);
+
   
 }
 
@@ -267,39 +270,6 @@ void EvolvePressure::transform(Options& state) {
   mesh->communicate(P);
   P.applyParallelBoundary();
 
-  if (neumann_boundary_average_z) {
-    // Take Z (usually toroidal) average and apply as X (radial) boundary condition
-    if (mesh->firstX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal Pavg = 0.0; // Average P in Z
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          Pavg += P(mesh->xstart, j, k);
-        }
-        Pavg /= mesh->LocalNz;
-
-        // Apply boundary condition
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          P(mesh->xstart - 1, j, k) = 2. * Pavg - P(mesh->xstart, j, k);
-          P(mesh->xstart - 2, j, k) = P(mesh->xstart - 1, j, k);
-        }
-      }
-    }
-
-    if (mesh->lastX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal Pavg = 0.0; // Average P in Z
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          Pavg += P(mesh->xend, j, k);
-        }
-        Pavg /= mesh->LocalNz;
-
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          P(mesh->xend + 1, j, k) = 2. * Pavg - P(mesh->xend, j, k);
-          P(mesh->xend + 2, j, k) = P(mesh->xend + 1, j, k);
-        }
-      }
-    }
-  }
 
   auto& species = state["species"][name];
 
@@ -307,11 +277,14 @@ void EvolvePressure::transform(Options& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
-  Field3D Pfloor = floor(P, 0.0);
+  Pfloor = floor(P, 0.0);
   T = Pfloor / floor(N, density_floor);
   Pfloor = N * T; // Ensure consistency
 
-
+  Pfloor.applyBoundary();
+  mesh->communicate(Pfloor);
+  Pfloor.applyParallelBoundary();
+  
   set(species["pressure"], Pfloor);
   mesh->communicate(T);
   T.applyParallelBoundary("parallel_neumann_o1");
@@ -328,9 +301,9 @@ void EvolvePressure::finally(const Options& state) {
   if (!P.isFci()) {
     P.clearParallelSlices();
   }
-  P.setBoundaryTo(get<Field3D>(species["pressure"]));
-  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
-
+  P = get<Field3D>(species["pressure"]);
+  Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
@@ -361,7 +334,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      TE_parflow = -FV::Div_par_H3(P, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par) - (2. / 3) * Pfloor * Div_par(V);
+      TE_parflow = -FV::Div_par_H3(P, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par) - (2. / 3) * Pfloor * FV::Div_par(V);
       
       ddt(P) += TE_parflow;
       // Work done. This balances energetically a term in the momentum equation

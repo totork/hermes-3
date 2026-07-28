@@ -642,6 +642,25 @@ inline Field3D Div_par_H3(const Field3D& f_in, const Field3D& v_in,
   return result;
 }
 
+
+inline const Field3D Div_par(const Field3D& v_in){
+  Coordinates* coord = v_in.getCoordinates();
+  ASSERT1(v_in.hasParallelSlices());
+  const auto& v_up = v_in.yup();
+  const auto& v_down = v_in.ydown();
+  Field3D result{emptyFrom(v_in)};
+  BOUT_FOR(i, v_in.getRegion("RGN_NOBNDRY")) {
+    const auto iyp = i.yp();
+    const auto iym = i.ym();
+    BoutReal flux_up = 0.0;
+    BoutReal flux_down = 0.0;
+    flux_up = 0.5 * (v_in[i] + v_up[iyp]) * coord->cell_area_yhigh()[i];
+    flux_down = 0.5 * (v_in[i] + v_down[iym]) * coord->cell_area_ylow()[i];
+    result[i] = (flux_up - flux_down) / (coord->cell_volume()[i]);
+  }
+  return result;
+}  
+
 /// Div ( a g Grad_perp(f) )  -- Perpendicular gradient-driven advection
 ///
 /// This version uses a slope limiter to calculate cell edge values of g in X,

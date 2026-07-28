@@ -57,6 +57,8 @@ private:
   BoutReal scale_ExB;
   int mode_div_par_fvv;
 
+  Field3D Nlim;
+  
   BoutReal hyper_z;  ///< Hyper-diffusion
   BoutReal hyper_nv;
   std::string Vname;

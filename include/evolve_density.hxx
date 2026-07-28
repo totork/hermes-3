@@ -91,7 +91,7 @@ private:
   Field3D Sn; ///< Total density source
   int mode_div_par;
   Field3D lowsource_term;
-  
+  Field3D Nlim;
   BoutReal adapt_source;
   
   bool source_only_in_core;  ///< Zero source where Y is non-periodic?

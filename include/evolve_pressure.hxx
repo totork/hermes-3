@@ -112,7 +112,7 @@ private:
   FieldGeneratorPtr source_prefactor_function;
   bool spitzer_conductivity;
   BoutReal adapt_source;
-
+  Field3D Pfloor;
   BoutReal tau_1, lambda_sh, tau_0;
   
   BoutReal hyper_z; ///< Hyper-diffusion

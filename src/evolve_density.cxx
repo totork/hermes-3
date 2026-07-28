@@ -146,6 +146,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     bracket_factor = 1.0;
   }
 
+  Nlim.setBoundary(std::string("N") + name);
+
   
 }
 
@@ -160,7 +162,13 @@ void EvolveDensity::transform(Options& state) {
   N.applyParallelBoundary();
 
   auto& species = state["species"][name];
-  set(species["density"], floor(N, 0.0)); // Density in state always >= 0
+
+  Nlim = floor(N, 0.0);
+  Nlim.applyBoundary();
+  mesh->communicate(Nlim);
+  Nlim.applyParallelBoundary();
+  
+  set(species["density"], Nlim); // Density in state always >= 0
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
     set(species["charge"], charge);
@@ -202,7 +210,7 @@ void EvolveDensity::finally(const Options& state) {
 
   // Get density boundary conditions
   // but retain densities which fall below zero
-  N.setBoundaryTo(get<Field3D>(species["density"]));
+  N = get<Field3D>(species["density"]);
 
   if (exb_advection and (fabs(charge) > 1e-5) and
       state.isSection("fields") and state["fields"].isSet("phi")) {
