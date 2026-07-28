@@ -276,26 +276,7 @@ int Hermes::init(bool restarting) {
 	coord->g_13 /= SQ(rho_s0);
 	coord->g_23 /= SQ(rho_s0);
 
-	/*
-	Field3D tmp_Bxy = 0.0;
-	tmp_Bxy.applyBoundary("neumann");
-	mesh->communicate(tmp_Bxy);
-	tmp_Bxy.applyParallelBoundary("parallel_neumann_o1");
-	
-	BOUT_FOR(i, coord->Bxy.getRegion("RGN_NOY")) {
-
-	  const auto iyp = i.yp();
-	  const auto iym = i.ym();
-	  
-	  tmp_Bxy[i] = coord->Bxy[i] / Bnorm;
-	  tmp_Bxy.yup()[iyp] = coord->Bxy.yup()[iyp] / Bnorm;
-	  tmp_Bxy.ydown()[iym] = coord->Bxy.ydown()[iym] / Bnorm;
-		    	  
-	}	
-	coord->Bxy = tmp_Bxy;
-	*/
-	coord->Bxy = (coord->Bxy.asField3DParallel()) / Bnorm;
-	
+	coord->Bxy = (coord->Bxy.asField3DParallel()) / Bnorm;	
 	
 	ASSERT2(coord->Bxy.hasParallelSlices());
 	
