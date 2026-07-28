@@ -58,6 +58,8 @@ private:
   bool heating;
   bool diagnose; ///< Output additional diagnostics?
 
+  Coordinates::FieldMetric Grad_par_logB;
+  
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar

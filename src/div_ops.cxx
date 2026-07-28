@@ -2054,12 +2054,8 @@ const Field3D Div_par_K_Grad_par_H3(const Field3D& Kin, const Field3D& fin,
     auto B_down = coord->Bxy.ydown();
 
     auto g_22 = coord->g_22;
-    auto g_22_up = coord->g_22.yup();
-    auto g_22_down = coord->g_22.ydown();
 
     auto dy = coord->dy;
-    auto dy_up = coord->dy.yup();
-    auto dy_down = coord->dy.ydown();
 
     auto K_up = Kin.yup();
     auto K_down = Kin.ydown();
@@ -2078,20 +2074,6 @@ const Field3D Div_par_K_Grad_par_H3(const Field3D& Kin, const Field3D& fin,
       const auto iyp = i.yp();
       const auto iym = i.ym();
 
-      // // parallel lengths
-      // BoutReal dl = dy[i] * sqrt(g_22[i]);
-      // BoutReal dl_up = dy_up[iyp] * sqrt(g_22_up[iyp]);
-      // BoutReal dl_down = dy_down[iym] * sqrt(g_22_down[iym]);
-
-      // BoutReal gradient_up = 2 * (f_up[iyp] - fin[i]) / (dl_up + dl);
-      // BoutReal gradient_down = 2 * (fin[i] - f_down[iym]) / (dl + dl_down);
-
-      // result[i] = B[i]
-      //             * (gradient_up * (K_up[iyp] + Kin[i]) / (B_up[iyp] + B[i])
-      //                - gradient_down * (K_down[iym] + Kin[i]) / (B_down[iym] + B[i]))
-      //             / dl;
-
-      // Upper cell edge
       BoutReal c = 0.5 * (Kin[i] + K_up[iyp]);      
       BoutReal gradient =  (f_up[iyp] - fin[i]) / (coord->dy[i] * sqrt(coord->g_22[i]));
 

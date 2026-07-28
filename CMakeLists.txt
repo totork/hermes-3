@@ -310,6 +310,35 @@ if(HERMES_TESTS)
 	DEPENDS setup-test)
     endif()
   endfunction()
+  hermes_add_integrated_test(1D-density-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-momentum-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-pressure-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-fluid-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-conduction-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-electron-viscosity-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-ion-viscosity-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+
+  hermes_add_integrated_test(1D-fluid
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(diffusion)
+  hermes_add_integrated_test(evolve_density)
+  hermes_add_integrated_test(vorticity
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
+
+  hermes_add_integrated_test(2D-density-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-fluid-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  
+  hermes_add_integrated_test(1D-neutral-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-full-density-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-full-momentum-fci
@@ -326,11 +355,7 @@ if(HERMES_TESTS)
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-sheathtest-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-fluid)
-  hermes_add_integrated_test(diffusion)
-  hermes_add_integrated_test(evolve_density)
-  hermes_add_integrated_test(vorticity
-    CONFLICTS BOUT_ENABLE_METRIC_3D)
+
   hermes_add_integrated_test(2D-neutral-perpdiffusion-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-perpdiffusion-conduction-fci
@@ -341,26 +366,8 @@ if(HERMES_TESTS)
     CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(alfven-wave
     CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-density-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-neutral-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-momentum-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-pressure-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-fluid-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-conduction-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-electron-viscosity-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-ion-viscosity-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-density-anomalous-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-fluid-anomalous-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
+
+
   hermes_add_integrated_test(fci-example-1
     REQUIRES BOUT_ENABLE_METRIC_3D
     DOWNLOAD https://zenodo.org/records/17571607/files/W7X-conf0-36x8x128.fci.nc?download=1

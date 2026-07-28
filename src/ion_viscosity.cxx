@@ -71,9 +71,14 @@ void IonViscosity::transform(Options &state) {
   Options& allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const Coordinates::FieldMetric Bxy = coord->Bxy;
-  const Coordinates::FieldMetric sqrtB = sqrt(Bxy);
-  const Coordinates::FieldMetric Grad_par_logB = Grad_par(log(Bxy));
+  const Field3D Bxy = coord->Bxy;
+  Field3D sqrtB = sqrt(Bxy);
+  mesh->communicate(sqrtB);
+  
+  if (!perpendicular && diagnose) {
+    const Coordinates::FieldMetric Grad_par_logB = Grad_par(log(Bxy));
+  }
+
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -122,7 +127,9 @@ void IonViscosity::transform(Options &state) {
     // This term is the parallel flow part of
     // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
     Field3D dummy;
-    const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_H3(eta / Bxy, sqrtB * V, dummy, true);
+
+    ASSERT2(V.hasParallelSlices());    
+    const Field3D div_Pi_cipar = sqrtB * Div_par_K_Grad_par_H3(eta.asField3DParallel()/Bxy, V.asField3DParallel() * sqrtB , dummy, true);
 
     add(species["momentum_source"], div_Pi_cipar);
     if (heating) {
