@@ -320,7 +320,9 @@ if(HERMES_TESTS)
     endif()
   endfunction()
   hermes_add_integrated_test(1D-density-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
+    REQUIRES BOUT_ENABLE_METRIC_3D
+    DOWNLOAD https://zenodo.org/records/17571607/files/W7X-conf0-36x8x128.fci.nc?download=1
+    DOWNLOAD_NAME grid.fci.nc)
   hermes_add_integrated_test(1D-momentum-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-pressure-fci
@@ -382,7 +384,8 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(vorticity
     CONFLICTS BOUT_ENABLE_METRIC_3D)
 
-
+  
+  
 
   
   # Unit tests
