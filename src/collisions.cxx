@@ -194,7 +194,8 @@ void Collisions::transform(Options& state) {
           // Collision frequency
           const BoutReal nu = SQ(SQ(SI::qe)) * Ne[i] * floor(coulomb_log, 1.0)
                               * 2 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
-
+	  ASSERT2(std::isfinite(Ne[i]));
+	  ASSERT2(std::isfinite(v1sq));
           ASSERT2(std::isfinite(nu));
           return nu;
         });
@@ -378,6 +379,14 @@ void Collisions::transform(Options& state) {
             const BoutReal v1sq = 2 * Tlim1 * SI::qe / mass1;
             const BoutReal v2sq = 2 * Tlim2 * SI::qe / mass2;
 
+	    ASSERT2(std::isfinite(Tlim1));
+	    ASSERT2(std::isfinite(Tlim2));
+	    ASSERT2(std::isfinite(Nlim1));
+	    ASSERT2(std::isfinite(Nlim2));
+	    ASSERT2(std::isfinite(v1sq));
+	    ASSERT2(std::isfinite(v2sq));
+	    ASSERT2(std::isfinite(coulomb_log));
+	    
             // Collision frequency
             const BoutReal nu = SQ(charge1 * charge2) * Nlim2 * floor(coulomb_log, 1.0)
                                 * (1. + mass1 / mass2)
