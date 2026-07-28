@@ -23,6 +23,11 @@ using bout::globals::mesh;
 
 EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) :
   name(name), Vname(fmt::format("V{}", name)) {
+
+  const Options& units = alloptions["units"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
   
   // Evolve the momentum in time
   solver->add(NV, std::string("NV") + name);
@@ -33,7 +38,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
                    .doc("Which mode to use for the parallel divergence. 0 is the standard mode, 1 is with slope limiter.")
                    .withDefault<int>(0);
   
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e13) / Nnorm;
 
   low_n_diffuse_perp = options["low_n_diffuse_perp"]
                            .doc("Perpendicular diffusion at low density")
@@ -69,9 +74,6 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
 
-  const Options& units = alloptions["units"];
-  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
-  const BoutReal Lnorm = units["meters"];
   hyper_nv = options["hyper_nv"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
 
 

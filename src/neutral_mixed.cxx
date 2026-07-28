@@ -15,27 +15,6 @@ using bout::globals::mesh;
 using ParLimiter = FV::Upwind;
 
 
-inline BoutReal softFloor(BoutReal value, BoutReal min) {
-  value = std::max(value, 0.0);
-  return value + min * exp(-value / min);
-}
-
-/// Apply a soft floor value \p f to a field \p var. Any value lower than
-/// the floor is set to the floor.
-///
-/// @param[in] var  Variable to apply floor to
-/// @param[in] f    The floor value. Must be > 0 (NOT zero)
-/// @param[in] rgn  The region to calculate the result over
-template <typename T, typename = bout::utils::EnableIfField<T>>
-inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_NOBNDRY") {
-  T result{emptyFrom(var)};
-  result.allocate();
-
-  BOUT_FOR(d, var.getRegion(rgn)) { result[d] = softFloor(var[d], f); }
-
-  return result;
-}
-
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
   : name(name), yboundary(YBndryType::all, nullptr, *mesh) {
@@ -292,18 +271,18 @@ void NeutralMixed::transform(Options& state) {
     NVn.clearParallelSlices();
   }
   
-  Nn = floor(Nn, 0.0);
-  Pn = floor(Pn, 0.0);
+  Nn = floor(Nn.asField3DParallel(), 0.0);
+  Pn = floor(Pn.asField3DParallel(), 0.0);
 
-  // Nnlim Used where division by neutral density is needed
-  Nnlim = floor(Nn, density_floor);  
-  Tn = Pn / Nnlim;
+
+  Nnlim = floor(Nn.asField3DParallel(), density_floor);  
+  Tn = Pn.asField3DParallel() / Nnlim;
   Pn_solver = Pn;
-  Pn = Tn*Nn;
+  Pn = Tn .asField3DParallel()*Nn;
   
-  Vn = NVn / (AA * Nnlim);
+  Vn = NVn.asField3DParallel() / (AA * Nnlim.asField3DParallel());
   
-  Pnlim = floor(Pn, pressure_floor);
+  Pnlim = floor(Pn.asField3DParallel(), pressure_floor);
 
 
   /////////////////////////////////////////////////////
@@ -341,6 +320,13 @@ void NeutralMixed::transform(Options& state) {
   
   // Set values in the state
   auto& localstate = state["species"][name];
+
+  ASSERT2(Nn.hasParallelSlices());
+  ASSERT2(Pn.hasParallelSlices());
+  ASSERT2(NVn.hasParallelSlices());
+  ASSERT2(Vn.hasParallelSlices());
+  ASSERT2(Tn.hasParallelSlices());
+
   set(localstate["density"], Nn);
   set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn);
@@ -362,10 +348,12 @@ void NeutralMixed::finally(const Options& state) {
 
 
   
-  Nnlim = floor(Nn, density_floor);
-  Tnlim = floor(Tn, temperature_floor);
+  Nnlim = floor(Nn.asField3DParallel(), density_floor);
+  Tnlim = floor(Tn.asField3DParallel(), temperature_floor);
   
-  logPnlim = log(Pnlim);
+  logPnlim = log(Pnlim.asField3DParallel());
+
+
 
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
@@ -509,7 +497,7 @@ void NeutralMixed::finally(const Options& state) {
   if (!isMMS){
     ddt(Nn) = -FV::Div_par_H3(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
   } else {
-    ddt(Nn) = -Div_par(Nn * Vn);
+    ddt(Nn) = -Div_par(Nn.asField3DParallel() * Vn);
   }
   
 
@@ -552,12 +540,12 @@ void NeutralMixed::finally(const Options& state) {
 
   if (evolve_pressure) {
   
-    Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
+    Field3D e_plus_p = Nnlim.asField3DParallel() * Tn + (2. / 3) * Pn.asField3DParallel();
 
     if (!isMMS) {
       ddt(Pn) = - FV::Div_par_H3(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
     } else {
-      ddt(Pn) = - Div_par(e_plus_p * Vn);
+      ddt(Pn) = - Div_par(e_plus_p.asField3DParallel() * Vn);
     }
     ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
 

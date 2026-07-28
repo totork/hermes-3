@@ -22,14 +22,21 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   auto& options = alloptions[name];
 
+  const Options& units = alloptions["units"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
+  const BoutReal Tnorm = units["eV"];
 
+    
+  
   mode_div_par = options["mode_div_par"]
                    .doc("Which mode to use for the parallel divergence. 0 is the standard mode, 1 is with slope limiter.")
                    .withDefault<int>(0);
 
   evolve_log = options["evolve_log"].doc("Evolve the logarithm of pressure?").withDefault<bool>(false);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e13) / Nnorm;
 
 
   spitzer_conductivity = options["spitzer_conductivity"]
@@ -104,11 +111,6 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     .doc("Enable preconditioner? (Note: solver may not use it)")
     .withDefault<bool>(true);
 
-  const Options& units = alloptions["units"];
-  const BoutReal Nnorm = units["inv_meters_cubed"];
-  const BoutReal Tnorm = units["eV"];
-  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
-  const BoutReal Lnorm = units["meters"];
   hyper_p = options["hyper_p"].doc("Hyper-viscosity. < 0 -> off").withDefault(-1.0) / (Lnorm * Lnorm * Lnorm * Lnorm * Omega_ci);
 
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;

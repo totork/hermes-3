@@ -19,6 +19,11 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
 
   auto& options = alloptions[name];
 
+  const Options& units = alloptions["units"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
+  
   mode_div_par = options["mode_div_par"]
                    .doc("Which mode to use for the parallel divergence. 0 is the standard mode, 1 is with slope limiter.")
                    .withDefault<int>(0);
@@ -42,22 +47,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
+  density_floor = options["density_floor"].doc("Minimum density floor in [m^-3]").withDefault(1e13) / Nnorm;
 
-  low_n_diffuse = options["low_n_diffuse"]
-                      .doc("Parallel diffusion at low density")
-                      .withDefault<bool>(false);
 
-  low_n_diffuse_perp = options["low_n_diffuse_perp"]
-                           .doc("Perpendicular diffusion at low density")
-                           .withDefault<bool>(false);
 
-  pressure_floor = density_floor * (1./get<BoutReal>(alloptions["units"]["eV"]));
-
-  
-  low_p_diffuse_perp = options["low_p_diffuse_perp"]
-                           .doc("Perpendicular diffusion at low pressure")
-                           .withDefault<bool>(false);
 
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
@@ -96,10 +89,6 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
-  const Options& units = alloptions["units"];
-  const BoutReal Nnorm = units["inv_meters_cubed"];
-  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
-  const BoutReal Lnorm = units["meters"];
 
   n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-6) * Omega_ci;
@@ -163,28 +152,15 @@ void EvolveDensity::transform(Options& state) {
 
   auto& species = state["species"][name];
 
-  Nlim = floor(N, 0.0);
-  Nlim.applyBoundary();
-  mesh->communicate(Nlim);
-  Nlim.applyParallelBoundary();
-  
+  Nlim = floor(N.asField3DParallel(), density_floor);
+
+  ASSERT2(Nlim.hasParallelSlices());
   set(species["density"], Nlim); // Density in state always >= 0
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
     set(species["charge"], charge);
   }
 
-  if (low_n_diffuse) {
-    // Calculate a diffusion coefficient which can be used in N, P and NV equations
-
-    auto* coord = mesh->getCoordinates();
-
-    Field3D low_n_coeff =
-        SQ(coord->dy) * coord->g_22
-        * log(density_floor / clamp(N, 1e-3 * density_floor, density_floor));
-    low_n_coeff.applyBoundary("neumann");
-    set(species["low_n_coeff"], low_n_coeff);
-  }
 
   // The particle source needs to be known in other components
   // (e.g when electromagnetic terms are enabled)
@@ -251,23 +227,6 @@ void EvolveDensity::finally(const Options& state) {
     }
   }
 
-  if (low_n_diffuse) {
-    // Diffusion which kicks in at very low density, in order to
-    // help prevent negative density regions
-
-    Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(N) += FV::Div_par_K_Grad_par(low_n_coeff, N);
-  }
-
-  if (low_n_diffuse_perp) {
-    ddt(N) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), N,
-                                    bndry_flux);
-  }
-
-  if (low_p_diffuse_perp) {
-    Field3D Plim = floor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
-    ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N, true);
-  }
 
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
