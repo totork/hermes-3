@@ -102,6 +102,15 @@ SheathBoundaryParallel::SheathBoundaryParallel(std::string name, Options &allopt
                        .withDefault(Field3D(0.0))
                    / Tnorm;
 
+  wall_potential.applyBoundary("neumann");
+  mesh->communicate(wall_potential);
+  wall_potential.applyParallelBoundary("parallel_neumann_o1");
+
+  zeroes = 0.0;
+  zeroes.applyBoundary("neumann");
+  mesh->communicate(zeroes);
+  zeroes.applyParallelBoundary("parallel_neumann_o1");
+  
   // Note: wall potential at the last cell before the boundary is used,
   // not the value at the boundary half-way between cells. This is due
   // to how twist-shift boundary conditions and non-aligned inputs are
@@ -123,7 +132,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+  Field3D Ne = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["density"]));
   Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
     ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
@@ -140,7 +149,7 @@ void SheathBoundaryParallel::transform(Options &state) {
   // This is for applying boundary conditions
   Field3D Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
     ? toFieldAligned(getNoBoundary<Field3D>(electrons["velocity"]))
-    : zeroFrom(Ne);
+    : zeroes;
 
   bool has_NVe = IS_SET_NOBOUNDARY(electrons["momentum"]);
   Field3D NVe;
@@ -150,6 +159,14 @@ void SheathBoundaryParallel::transform(Options &state) {
 
   Coordinates *coord = mesh->getCoordinates();
 
+  ASSERT2(Ne.hasParallelSlices());
+  ASSERT2(Ve.hasParallelSlices());
+  ASSERT2(Te.hasParallelSlices());
+  ASSERT2(Pe.hasParallelSlices());
+
+
+
+  
   //////////////////////////////////////////////////////////////////
   // Electrostatic potential
   // If phi is set, use free boundary condition
@@ -158,7 +175,13 @@ void SheathBoundaryParallel::transform(Options &state) {
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = toFieldAligned(getNoBoundary<Field3D>(state["fields"]["phi"]));
   } else {
+    /*
     phi = zeroFrom(Ne); // So phi is field aligned
+    phi.applyBoundary("neumann");
+    mesh->communicate(phi);
+    phi.applyParallelBoundary("parallel_neumann_o1");
+    */
+    phi = zeroes;
     always_zero_current = true; // Assume zero current to calculate phi on boundary
   }
 
@@ -170,7 +193,7 @@ void SheathBoundaryParallel::transform(Options &state) {
     //
     // To avoid looking up species for every grid point, this
     // loops over the boundaries once per species.
-    Field3D ion_sum {zeroFrom(Ne)};
+    Field3D ion_sum {zeroes};
 
     // Iterate through charged ion species
     for (auto& kv : allspecies.getChildren()) {
@@ -181,7 +204,7 @@ void SheathBoundaryParallel::transform(Options &state) {
         continue; // Skip electrons and non-charged ions
       }
 
-      const Field3D Ni = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
+      const Field3D Ni = toFieldAligned(GET_NOBOUNDARY(Field3D, species["density"]));
       const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
       const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
       const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
@@ -241,8 +264,11 @@ void SheathBoundaryParallel::transform(Options &state) {
       
       }); // end iter_regions
       
-      
+
       phi = 0.0;
+      phi.applyBoundary("neumann");
+      mesh->communicate(phi);
+      phi.applyParallelBoundary("parallel_neumann_o1");
       
       // ion_sum now contains  sum  s_i Z_i C_i over all ion species
       // at mesh->ystart and mesh->yend indices
@@ -268,7 +294,7 @@ void SheathBoundaryParallel::transform(Options &state) {
 
   Field3D electron_energy_source = electrons.isSet("energy_source")
     ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
-    : zeroFrom(Ne);
+    : zeroes;
 
   yboundary.iter([&](auto& pnt) {
 
@@ -392,7 +418,7 @@ void SheathBoundaryParallel::transform(Options &state) {
                                    : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ni = toFieldAligned(getNoBoundary<Field3D>(species["density"]));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
       ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
@@ -403,7 +429,7 @@ void SheathBoundaryParallel::transform(Options &state) {
     // and then put back into the state
     Field3D Vi = species.isSet("velocity")
       ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
-      : zeroFrom(Ni);
+      : zeroes;
     Field3D NVi = species.isSet("momentum")
       ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
       : Mi * Ni * Vi;
@@ -411,7 +437,7 @@ void SheathBoundaryParallel::transform(Options &state) {
     // Energy source will be modified in the domain
     Field3D energy_source = species.isSet("energy_source")
       ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
-      : zeroFrom(Ni);
+      : zeroes;
 
     yboundary.iter([&](auto& pnt) {
 

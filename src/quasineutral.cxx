@@ -3,6 +3,9 @@
 
 #include "../include/quasineutral.hxx"
 
+using bout::globals::mesh;
+
+
 Quasineutral::Quasineutral(std::string name, Options &alloptions,
                            Solver *UNUSED(solver))
     : name(name) {
@@ -19,7 +22,11 @@ void Quasineutral::transform(Options &state) {
   // Iterate through all subsections
   Options &allspecies = state["species"];
 
+  
   Field3D rho = 0.0;
+  rho.applyBoundary("neumann");
+  mesh->communicate(rho);
+  rho.applyParallelBoundary("parallel_neumann_o1");
   for (auto& kv : allspecies.getChildren()) {
     Options& species = allspecies[kv.first]; // Note: Need non-const
 
@@ -35,20 +42,23 @@ void Quasineutral::transform(Options &state) {
     if (!species.isSet("density")) {
       continue;
     }
-
-    rho = rho + getNoBoundary<Field3D>(species["density"]) * q;
+    Field3D new_rho = getNoBoundary<Field3D>(species["density"]).asField3DParallel() * q;
+    rho = rho.asField3DParallel() + new_rho.asField3DParallel();
     
   }
-
+  ASSERT2(rho.hasParallelSlices());
     
 
   // Set quantites for this species
   Options &species = allspecies[name];
 
   // Calculate density required. Floor so that density is >= 0
-  Field3D den = rho / (-charge);
-  density = floor(den, 0.0);
-  set(species["density"], density);
+  BoutReal qq = -1.0 * charge;
+  Field3D den = rho.asField3DParallel() / qq;
+
+  ASSERT2(den.hasParallelSlices());
+
+  set(species["density"], den);
 
   set(species["charge"], charge);
 

@@ -37,12 +37,16 @@ void ZeroCurrent::transform(Options &state) {
       const BoutReal charge = get<BoutReal>(species["charge"]);
       const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
 
+      ASSERT2(N.hasParallelSlices());
+      ASSERT2(V.hasParallelSlices());
+
+      
       if (!current.isAllocated()) {
         // Not yet allocated -> Set to the value
         // This avoids having to set to zero initially and add the first time
-        current = charge * N * V;
+        current = charge * N.asField3DParallel() * V.asField3DParallel();
       } else {
-        current += charge * N * V;
+        current += charge * N.asField3DParallel() * V.asField3DParallel();
       }
     }
   }
@@ -59,7 +63,11 @@ void ZeroCurrent::transform(Options &state) {
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * floor(N, 1e-5));
+  ASSERT2(N.hasParallelSlices());
+  
+  velocity = current.asField3DParallel() / (-charge * N.asField3DParallel());
+
+  ASSERT2(velocity.hasParallelSlices());
   set(species["velocity"], velocity);
 }
 

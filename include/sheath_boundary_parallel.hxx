@@ -83,6 +83,8 @@ private:
 
   bool always_zero_current; ///< Set phi boundary assuming zero current?
 
+  Field3D zeroes;
+  
   Field3D wall_potential; ///< Voltage at the wall. Normalised units.
 
   bool dampen_low_density;

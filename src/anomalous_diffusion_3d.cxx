@@ -110,7 +110,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
 
   if (include_D_par) {
     Field3D dummy;
-    add(species["density_source"], Div_par_K_Grad_par_mod(anomalous_D_par, N, dummy, false));
+    add(species["density_source"], Div_par_K_Grad_par_H3(anomalous_D_par, N, dummy, false));
   }
   
   if (include_D) {
