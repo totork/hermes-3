@@ -3,6 +3,9 @@
 
 #include "../include/quasineutral.hxx"
 
+using bout::globals::mesh;
+
+
 Quasineutral::Quasineutral(std::string name, Options &alloptions,
                            Solver *UNUSED(solver))
     : name(name) {
@@ -16,35 +19,46 @@ Quasineutral::Quasineutral(std::string name, Options &alloptions,
 }
 
 void Quasineutral::transform(Options &state) {
-  AUTO_TRACE();
   // Iterate through all subsections
   Options &allspecies = state["species"];
 
-  // Add charge density of other species
-  const Field3D rho = std::accumulate(
-      // Iterate through species
-      begin(allspecies.getChildren()), end(allspecies.getChildren()),
-      // Start with no charge
-      Field3D(0.0),
-      [this](Field3D value,
-             const std::map<std::string, Options>::value_type &name_species) {
-        const Options &species = name_species.second;
-        // Add other species which have density and charge
-        if (name_species.first != name and species.isSet("charge") and
-            species.isSet("density")) {
-          // Note: Not assuming that the boundary has been set
-          return value + getNoBoundary<Field3D>(species["density"]) *
-                             get<BoutReal>(species["charge"]);
-        }
-        return value;
-      });
+  
+  Field3D rho = 0.0;
+  rho.applyBoundary("neumann");
+  mesh->communicate(rho);
+  rho.applyParallelBoundary("parallel_neumann_o1");
+  for (auto& kv : allspecies.getChildren()) {
+    Options& species = allspecies[kv.first]; // Note: Need non-const
+
+    if (kv.first == name) {
+      continue;
+    }
+
+    auto q = get<BoutReal>(species["charge"]);
+    if (fabs(q) < 1e-5 ) {
+      continue;
+    }
+
+    if (!species.isSet("density")) {
+      continue;
+    }
+    Field3D new_rho = getNoBoundary<Field3D>(species["density"]).asField3DParallel() * q;
+    rho = rho.asField3DParallel() + new_rho.asField3DParallel();
+    
+  }
+  ASSERT2(rho.hasParallelSlices());
+    
 
   // Set quantites for this species
   Options &species = allspecies[name];
 
   // Calculate density required. Floor so that density is >= 0
-  density = floor(rho / (-charge), 0.0);
-  set(species["density"], density);
+  BoutReal qq = -1.0 * charge;
+  Field3D den = rho.asField3DParallel() / qq;
+
+  ASSERT2(den.hasParallelSlices());
+
+  set(species["density"], den);
 
   set(species["charge"], charge);
 
@@ -57,7 +71,6 @@ void Quasineutral::finally(const Options &state) {
 }
 
 void Quasineutral::outputVars(Options &state) {
-  AUTO_TRACE();
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
   // Save the density

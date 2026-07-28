@@ -70,7 +70,6 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 
 SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions,
                                            Solver*) {
-  AUTO_TRACE();
 
   Options& options = alloptions[name];
 
@@ -142,7 +141,6 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
 }
 
 void SheathBoundarySimple::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& allspecies = state["species"];
   Options& electrons = allspecies["e"];

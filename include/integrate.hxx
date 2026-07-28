@@ -8,7 +8,8 @@
 #include <bout/field3d.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/fv_ops.hxx>
-
+#include <bout/difops.hxx>
+#include <bout/vector3d.hxx>
 #include "../include/hermes_build_config.hxx"
 
 /// Get the first argument from a parameter pack
@@ -19,7 +20,7 @@ auto firstArg(const Head &head, Tail... ) {
 
 /// Return the value at the left of a cell,
 /// given cell centre values at this cell and two neighbours
-template <typename CellEdges>
+template <typename CellEdges >
 BoutReal cellLeft(BoutReal c, BoutReal m, BoutReal p) {
   CellEdges cellboundary;
   FV::Stencil1D s {.c = c, .m = m, .p = p};
@@ -29,7 +30,7 @@ BoutReal cellLeft(BoutReal c, BoutReal m, BoutReal p) {
 
 /// Return the value at the right of a cell,
 /// given cell centre values at this cell and two neighbours
-template <typename CellEdges>
+template <typename CellEdges >
 BoutReal cellRight(BoutReal c, BoutReal m, BoutReal p) {
   CellEdges cellboundary;
   FV::Stencil1D s {.c = c, .m = m, .p = p};

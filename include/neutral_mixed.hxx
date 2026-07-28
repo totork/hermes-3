@@ -7,6 +7,10 @@
 #include <string>
 
 #include <bout/invert_laplace.hxx>
+#include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
+#include <bout/solver.hxx>
+
 
 #include "component.hxx"
 #include <bout/yboundary_regions.hxx>
@@ -37,13 +41,14 @@ struct NeutralMixed : public Component {
   void precon(const Options &state, BoutReal gamma) override;
 private:
   std::string name;  ///< Species name
-  YBoundary yboundary;
+
   std::shared_ptr<FCI::dagp_fv> dagp;
   Field3D Nn, Pn, NVn; // Density, pressure and parallel momentum
   Field3D Vn; ///< Neutral parallel velocity
   Field3D Tn; ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
   bool isMMS;
+  YBoundary yboundary;
   Field3D Pn_solver;
   bool use_eos;
   bool viscous_heating;

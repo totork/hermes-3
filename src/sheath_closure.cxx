@@ -1,5 +1,6 @@
 
 #include "../include/sheath_closure.hxx"
+#include <bout/mesh.hxx>
 
 SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
   Options& options = alloptions[name];
@@ -32,7 +33,6 @@ SheathClosure::SheathClosure(std::string name, Options &alloptions, Solver *) {
 }
 
 void SheathClosure::transform(Options &state) {
-  AUTO_TRACE();
   
   // Get electrostatic potential
   auto phi = get<Field3D>(state["fields"]["phi"]);
@@ -56,8 +56,8 @@ void SheathClosure::transform(Options &state) {
     // Sheath heat transmission gamma * n * T * cs
 
     auto Te = get<Field3D>(electrons["temperature"]);
-    
-    Field3D qsheath = floor(sheath_gamma * n * Te * sqrt(Te), 0.0);
+    Field3D tmp = sheath_gamma * n * Te * sqrt(Te);
+    Field3D qsheath = floor(tmp, 0.0);
     
     subtract(electrons["energy_source"], qsheath / L_par);
   }
@@ -87,8 +87,8 @@ void SheathClosure::transform(Options &state) {
     for (auto& kv : allspecies.getChildren()) {
       Options& species = allspecies[kv.first];
       Field3D Ns = get<Field3D>(species["density"]);
-
-      Field3D sheath_flux = floor(Ns * c_s, 0.0);
+      Field3D tmp = Ns * c_s;
+      Field3D sheath_flux = floor(tmp, 0.0);
       subtract(species["density_source"], sheath_flux / L_par);
 
       if (kv.first != "e") {
@@ -96,8 +96,8 @@ void SheathClosure::transform(Options &state) {
         // handled above
 
         auto Ts = get<Field3D>(species["temperature"]);
-
-        Field3D qsheath = floor(sheath_gamma_ions * Ts * sheath_flux, 0.0);
+	Field3D tmp1 = sheath_gamma_ions * Ts * sheath_flux;
+        Field3D qsheath = floor(tmp1, 0.0);
 
         subtract(species["energy_source"], qsheath / L_par);
       }

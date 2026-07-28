@@ -14,7 +14,6 @@ BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:maxits", 1000);
 
 Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* solver) {
-  AUTO_TRACE();
 
   Options& units = alloptions["units"];
   BoutReal Bnorm = units["Tesla"];
@@ -79,7 +78,6 @@ Electromagnetic::Electromagnetic(std::string name, Options &alloptions, Solver* 
 }
 
 void Electromagnetic::restartVars(Options& state) {
-  AUTO_TRACE();
 
   // NOTE: This is a hack because we know that the loaded restart file
   //       is passed into restartVars in PhysicsModel::postInit
@@ -100,7 +98,6 @@ void Electromagnetic::restartVars(Options& state) {
 }
 
 void Electromagnetic::transform(Options &state) {
-  AUTO_TRACE();
   
   Options& allspecies = state["species"];
 

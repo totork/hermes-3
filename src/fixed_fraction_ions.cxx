@@ -1,5 +1,6 @@
 
 #include "../include/fixed_fraction_ions.hxx"
+#include <bout/mesh.hxx>
 
 FixedFractionIons::FixedFractionIons(std::string name, Options &alloptions,
                                      Solver *UNUSED(solver)) {
@@ -29,7 +30,6 @@ FixedFractionIons::FixedFractionIons(std::string name, Options &alloptions,
 }
 
 void FixedFractionIons::transform(Options &state) {
-  AUTO_TRACE();
 
   // Electron density
   auto Ne = get<Field3D>(state["species"]["e"]["density"]);

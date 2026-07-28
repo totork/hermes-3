@@ -81,7 +81,7 @@ const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                                            Field3D& flux_xlow, Field3D& flux_ylow);
 
 /// Version with energy flow diagnostic
-const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f, Field3D& flow_ylow,
+const Field3D Div_par_K_Grad_par_H3(const Field3D& k, const Field3D& f, Field3D& flow_ylow,
                                      bool bndry_flux = true);
 
 
@@ -96,6 +96,15 @@ Field3D Div_a_Grad_perp_curv(const Field3D& b, const Field3D& a);
 const Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x);
 
 const Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue, const BoutReal scalefactor, const bool exponential=false);
+
+struct Stencil1D {
+
+  BoutReal c, m, p, mm, pp;
+
+
+  BoutReal L, R;
+};
+
 
 namespace FV {
 
@@ -145,7 +154,7 @@ struct Superbee {
 };
 
 
-struct StencilH3 {
+struct Stencil1D {
  
   BoutReal c, m, p, mm, pp;
 
@@ -153,7 +162,7 @@ struct StencilH3 {
   BoutReal L, R;
 };
 
-inline void VA(StencilH3& n, const BoutReal h){
+inline void VA(Stencil1D& n, const BoutReal h){
 
   const BoutReal dl = n.c - n.m;
   const BoutReal dr = n.p - n.c;
@@ -167,8 +176,41 @@ inline void VA(StencilH3& n, const BoutReal h){
 
 }
 
-  
+inline BoutReal minmod(BoutReal a, BoutReal b) {
+  if (a * b <= 0.0)
+    return 0.0;
 
+  if (fabs(a) < fabs(b))
+    return a;
+  return b;
+}
+  
+inline BoutReal minmod(BoutReal a, BoutReal b, BoutReal c) {
+  // If any of the signs are different, return zero gradient
+  if ((a * b <= 0.0) || (a * c <= 0.0)) {
+    return 0.0;
+  }
+
+  // Return the minimum absolute value
+  return SIGN(a) * BOUTMIN(fabs(a), fabs(b), fabs(c));
+}
+
+
+struct MinMod {
+  void operator()(Stencil1D& n) {
+    BoutReal slope = minmod(n.p - n.c, n.c - n.m);
+    n.L = n.c - 0.5 * slope;
+    n.R = n.c + 0.5 * slope;
+  }
+};
+  
+struct MC {
+  void operator()(Stencil1D& n) {
+    BoutReal slope = minmod(2. * (n.p - n.c), 0.5 * (n.p - n.m), 2. * (n.c - n.m));
+    n.L = n.c - 0.5 * slope;
+    n.R = n.c + 0.5 * slope;
+  }
+};
   
 /// This operator calculates Div_par(f v v)
 /// It is used primarily (only?) in the parallel momentum equation.
@@ -176,13 +218,14 @@ inline void VA(StencilH3& n, const BoutReal h){
 /// This operator is used rather than Div(f fv) so that the values of
 /// f and v are consistent with other advection equations: The product
 /// fv is not interpolated to cell boundaries.
-template <typename CellEdges = MC>
-const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
+
+inline const Field3D Div_par_fvv_H3(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in, bool fixflux = true, int mode = 0) {
   ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
   Mesh* mesh = f_in.getMesh();
   Coordinates* coord = f_in.getCoordinates();
-  CellEdges cellboundary;
+
+  Field3D result{emptyFrom(f_in)};
 
   if (f_in.isFci()){
     // FCI version, using yup/down fields
@@ -202,7 +245,12 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
     const auto g_22 = coord->g_22;
     const auto dy = coord->dy;
 
-    Field3D result{emptyFrom(f_in)};
+    const auto cell_area_yhigh = coord->cell_area_yhigh();
+    const auto cell_area_ylow = coord->cell_area_ylow();
+    const auto cell_volume = coord->cell_volume();
+
+
+  
     BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
       const auto iyp = i.yp();
       const auto iym = i.ym();
@@ -224,13 +272,13 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
 	  / (2 * dy[i] * sqrt(g_22[i]));
       } else if (mode==1) {
 
-	StencilH3 sf;
+	Stencil1D sf;
 	sf.c = f_in[i];
 	sf.m = f_down[iym];
 	sf.p = f_up[iyp];
 	VA(sf,coord->dy[i]);
 	
-	StencilH3 sv;
+	Stencil1D sv;
 	sv.c = v_in[i];
 	sv.m = v_down[iym];
 	sv.p = v_up[iyp];
@@ -238,13 +286,13 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
         
 	BoutReal midflux_up = sf.R * sv.R * sv.R;
 	BoutReal penflux_up = amax * sf.R * (v_in[i] - v_up[iyp]);
-	BoutReal flux_up = (midflux_up + penflux_up) * coord->cellarea_yup[i];
+	BoutReal flux_up = (midflux_up + penflux_up) * cell_area_yhigh[i];
 	
 	BoutReal midflux_down = sf.L * sv.L * sv.L;
 	BoutReal penflux_down = -amax * sf.L * (v_in[i] - v_down[iym]);
-	BoutReal flux_down = (midflux_down + penflux_down) * coord->cellarea_ydown[i];
+	BoutReal flux_down = (midflux_down + penflux_down) * cell_area_ylow[i];
 	
-	result[i] = (flux_up - flux_down) / coord->cellvolume[i];
+	result[i] = (flux_up - flux_down) / cell_volume[i];
 
 	
       } else {
@@ -263,150 +311,13 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
     }
     return result;
   }
-
-  ASSERT1(areFieldsCompatible(f_in, wave_speed_in));
-
-  /// Ensure that f, v and wave_speed are field aligned
-  Field3D f = toFieldAligned(f_in, "RGN_NOX");
-  Field3D v = toFieldAligned(v_in, "RGN_NOX");
-  Field3D wave_speed = toFieldAligned(wave_speed_in, "RGN_NOX");
-
-  Field3D result{zeroFrom(f)};
-
-  // Only need one guard cell, so no need to communicate fluxes
-  // Instead calculate in guard cells to preserve fluxes
-  int ys = mesh->ystart - 1;
-  int ye = mesh->yend + 1;
-
-  for (int i = mesh->xstart; i <= mesh->xend; i++) {
-
-    if (!mesh->firstY(i) || mesh->periodicY(i)) {
-      // Calculate in guard cell to get fluxes consistent between processors
-      ys = mesh->ystart - 1;
-    } else {
-      // Don't include the boundary cell. Note that this implies special
-      // handling of boundaries later
-      ys = mesh->ystart;
-    }
-
-    if (!mesh->lastY(i) || mesh->periodicY(i)) {
-      // Calculate in guard cells
-      ye = mesh->yend + 1;
-    } else {
-      // Not in boundary cells
-      ye = mesh->yend;
-    }
-
-    for (int j = ys; j <= ye; j++) {
-      // Pre-calculate factors which multiply fluxes
-
-
-      for (int k = 0; k < mesh->LocalNz; k++) {
-	// For right cell boundaries
-	BoutReal common_factor = (coord->J(i, j, k) + coord->J(i, j + 1, k))
-	  / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j + 1, k)));
-	
-	BoutReal flux_factor_rc = common_factor / (coord->dy(i, j, k) * coord->J(i, j, k));
-	BoutReal flux_factor_rp = common_factor / (coord->dy(i, j + 1, k) * coord->J(i, j + 1, k));
-	
-	// For left cell boundaries
-	common_factor = (coord->J(i, j, k) + coord->J(i, j - 1, k))
-	  / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j - 1, k)));
-	
-	BoutReal flux_factor_lc = common_factor / (coord->dy(i, j, k) * coord->J(i, j, k));
-	BoutReal flux_factor_lm = common_factor / (coord->dy(i, j - 1, k) * coord->J(i, j - 1, k));
-
-        ////////////////////////////////////////////
-        // Reconstruct f at the cell faces
-        // This calculates s.R and s.L for the Right and Left
-        // face values on this cell
-
-        // Reconstruct f at the cell faces
-        Stencil1D s;
-        s.c = f(i, j, k);
-        s.m = f(i, j - 1, k);
-        s.p = f(i, j + 1, k);
-
-        cellboundary(s); // Calculate s.R and s.L
-
-        // Reconstruct v at the cell faces
-        Stencil1D sv;
-        sv.c = v(i, j, k);
-        sv.m = v(i, j - 1, k);
-        sv.p = v(i, j + 1, k);
-
-        cellboundary(sv);
-
-        ////////////////////////////////////////////
-        // Right boundary
-
-        // Calculate velocity at right boundary (y+1/2)
-        BoutReal v_mid = 0.5 * (sv.c + sv.p);
-        // And mid-point density at right boundary
-        BoutReal n_mid = 0.5 * (s.c + s.p);
-        BoutReal flux;
-
-        if (mesh->lastY(i) && (j == mesh->yend) && !mesh->periodicY(i)) {
-          // Last point in domain
-
-          if (fixflux) {
-            // Use mid-point to be consistent with boundary conditions
-            flux = n_mid * v_mid * v_mid;
-          } else {
-            // Add flux due to difference in boundary values
-            flux = s.R * sv.R * sv.R // Use right cell edge values
-              + BOUTMAX(wave_speed(i, j, k), fabs(sv.c), fabs(sv.p))
-              * n_mid * (sv.R - v_mid); // Damp differences in velocity, not flux
-          }
-        } else {
-          // Maximum wave speed in the two cells
-          BoutReal amax = BOUTMAX(wave_speed(i, j, k), wave_speed(i, j + 1, k),
-                                  fabs(sv.c), fabs(sv.p));
-
-          flux = s.R * 0.5 * (sv.R + amax) * sv.R;
-        }
-
-        result(i, j, k) += flux * flux_factor_rc;
-        result(i, j + 1, k) -= flux * flux_factor_rp;
-
-        ////////////////////////////////////////////
-        // Calculate at left boundary
-
-        v_mid = 0.5 * (sv.c + sv.m);
-        n_mid = 0.5 * (s.c + s.m);
-
-        if (mesh->firstY(i) && (j == mesh->ystart) && !mesh->periodicY(i)) {
-          // First point in domain
-          if (fixflux) {
-            // Use mid-point to be consistent with boundary conditions
-            flux = n_mid * v_mid * v_mid;
-          } else {
-            // Add flux due to difference in boundary values
-            flux =
-              s.L * sv.L * sv.L
-              - BOUTMAX(wave_speed(i, j, k), fabs(sv.c), fabs(sv.m))
-              * n_mid * (sv.L - v_mid);
-          }
-        } else {
-          // Maximum wave speed in the two cells
-          BoutReal amax = BOUTMAX(wave_speed(i, j, k), wave_speed(i, j - 1, k),
-                                  fabs(sv.c), fabs(sv.m));
-
-          flux = s.L * 0.5 * (sv.L - amax) * sv.L;
-        }
-
-        result(i, j, k) -= flux * flux_factor_lc;
-        result(i, j - 1, k) += flux * flux_factor_lm;
-      }
-    }
-  }
-  return fromFieldAligned(result, "RGN_NOBNDRY");
+  return result;
 }
 
 // Calculates viscous heating due to numerical momentum fluxes
 // and flow of kinetic energy (in flow_ylow)
-template <typename CellEdges = MC>
-const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
+
+inline const Field3D Div_par_fvv_heating_H3(const Field3D& f_in, const Field3D& v_in,
                                   const Field3D& wave_speed_in, Field3D &flow_ylow,
                                   bool fixflux = true) {
 
@@ -631,14 +542,16 @@ const Field3D Div_par_fvv_heating(const Field3D& f_in, const Field3D& v_in,
 ///                          Already includes area factor * flux
 ///
 /// NB: Uses to/from FieldAligned coordinates
-template <typename CellEdges = MC>
-Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
+
+inline Field3D Div_par_H3(const Field3D& f_in, const Field3D& v_in,
                           const Field3D& wave_speed_in,
 		    Field3D &flow_ylow, bool fixflux = true, bool dissipative = false, bool bndry_flux = true,
 		    const int mode = 0) {
 
   Coordinates* coord = f_in.getCoordinates();
+  Field3D result{emptyFrom(f_in)};
 
+  
   if (f_in.isFci()){
     // Use mid-point (cell boundary) averages
     if (flow_ylow.isAllocated()) {
@@ -655,7 +568,11 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
     const auto& v_up = v_in.yup();
     const auto& v_down = v_in.ydown();
 
-    Field3D result{emptyFrom(f_in)};
+    const auto cell_area_yhigh = coord->cell_area_yhigh();
+    const auto cell_area_ylow = coord->cell_area_ylow();
+    const auto cell_volume = coord->cell_volume();
+
+  
     BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
       const auto iyp = i.yp();
       const auto iym = i.ym();
@@ -671,48 +588,27 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
       if (mode == 0){
 	if (dissipative) {
 	  
-	  flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
-	  flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
+	  flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * cell_area_yhigh[i];
+	  flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * cell_area_ylow[i];
 	  
-	  if (coord->has_bndry_yup[i] == true) {
-	    flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
-	  }
-	  if (coord->has_bndry_ydown[i] == true) {
-	    flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
-	  }
 	  
 	} else {
 	  
-	  flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
-	  flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
+	  flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * cell_area_yhigh[i];
+	  flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * cell_area_ylow[i];
 	  
 	}
 
-	if (coord->has_bndry_yup[i] == true && bndry_flux == false) {
-	  flux_up = 0.0;
-	}
-	
-	if (coord->has_bndry_ydown[i] == true && bndry_flux == false) {
-	  flux_down = 0.0;
-	}
-	
-	if (coord->has_bndry_yup[i] == true && flow_ylow.isAllocated()) {
-	  flow_ylow[i] = flux_up / coord->cellvolume[i];
-	}
-	
-	if (coord->has_bndry_ydown[i] == true && flow_ylow.isAllocated()) {
-	  flow_ylow[i] =	flux_down / coord->cellvolume[i];
-	}
       
       } else if (mode==1) { // Using slope limiters
 
-	StencilH3 sf;
+	Stencil1D sf;
 	sf.c = f_in[i];
 	sf.m = f_down[iym];
 	sf.p = f_up[iyp];
 	VA(sf,coord->dy[i]);
 	
-	StencilH3 sv;
+	Stencil1D sv;
 	sv.c = v_in[i];
 	sv.m = v_down[iym];
 	sv.p = v_up[iyp];
@@ -723,217 +619,47 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 	BoutReal flux_up = 0.0;
 	BoutReal flux_down = 0.0;
 	
-	flux_up = (sf.R * sv.R) * coord->cellarea_yup[i];
+	flux_up = (sf.R * sv.R) * cell_area_yhigh[i];
 	
-	flux_down = (sf.L * sv.L) * coord->cellarea_ydown[i];
+	flux_down = (sf.L * sv.L) * cell_area_ylow[i];
 	if (dissipative) {
-	  flux_up += (f_in[i] * amax - f_up[iyp] * amax) * coord->cellarea_yup[i];
-	  flux_down += (- f_in[i] * amax + f_down[iym] * amax) * coord->cellarea_ydown[i];
+	  flux_up += (f_in[i] * amax - f_up[iyp] * amax) * cell_area_yhigh[i];
+	  flux_down += (- f_in[i] * amax + f_down[iym] * amax) * cell_area_ylow[i];
 	}
 
-	if (coord->has_bndry_yup[i] == true) {
-	  flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
-	}
-	if (coord->has_bndry_ydown[i] == true) {
-	  flux_down = 0.25 * (f_in[i] + f_down[iym]) * (v_in[i] + v_down[iym]) * coord->cellarea_ydown[i];
-	}
 			     
 	
       } else {
 	throw BoutException("No mode chosen for parallel divergence!");  
       }
       
-      result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
+      result[i] = (flux_up - flux_down) / (cell_volume[i]);
 
 		 
     }
     return result;
   }
-  ASSERT1_FIELDS_COMPATIBLE(f_in, v_in);
-  ASSERT1_FIELDS_COMPATIBLE(f_in, wave_speed_in);
-
-  Mesh* mesh = f_in.getMesh();
-
-  CellEdges cellboundary;
-
-  ASSERT2(f_in.getDirectionY() == v_in.getDirectionY());
-  ASSERT2(f_in.getDirectionY() == wave_speed_in.getDirectionY());
-  const bool are_unaligned =
-      ((f_in.getDirectionY() == YDirectionType::Standard)
-       and (v_in.getDirectionY() == YDirectionType::Standard)
-       and (wave_speed_in.getDirectionY() == YDirectionType::Standard));
-
-  Field3D f = are_unaligned ? toFieldAligned(f_in, "RGN_NOX") : f_in;
-  Field3D v = are_unaligned ? toFieldAligned(v_in, "RGN_NOX") : v_in;
-  Field3D wave_speed =
-      are_unaligned ? toFieldAligned(wave_speed_in, "RGN_NOX") : wave_speed_in;
-
-  Field3D result{zeroFrom(f)};
-  flow_ylow = zeroFrom(f);
-
-  // Only need one guard cell, so no need to communicate fluxes
-  // Instead calculate in guard cells to preserve fluxes
-  int ys = mesh->ystart - 1;
-  int ye = mesh->yend + 1;
-
-  for (int i = mesh->xstart; i <= mesh->xend; i++) {
-
-    if (!mesh->firstY(i) || mesh->periodicY(i)) {
-      // Calculate in guard cell to get fluxes consistent between processors
-      ys = mesh->ystart - 1;
-    } else {
-      // Don't include the boundary cell. Note that this implies special
-      // handling of boundaries later
-      ys = mesh->ystart;
-    }
-
-    if (!mesh->lastY(i) || mesh->periodicY(i)) {
-      // Calculate in guard cells
-      ye = mesh->yend + 1;
-    } else {
-      // Not in boundary cells
-      ye = mesh->yend;
-    }
-
-    for (int j = ys; j <= ye; j++) {
-      // Pre-calculate factors which multiply fluxes
-#if not(BOUT_USE_METRIC_3D)
-      // For right cell boundaries
-      BoutReal common_factor = (coord->J(i, j) + coord->J(i, j + 1))
-                               / (sqrt(coord->g_22(i, j)) + sqrt(coord->g_22(i, j + 1)));
-
-      BoutReal flux_factor_rc = common_factor / (coord->dy(i, j) * coord->J(i, j));
-      BoutReal flux_factor_rp =
-          common_factor / (coord->dy(i, j + 1) * coord->J(i, j + 1));
-
-      BoutReal area_rp = common_factor * coord->dx(i, j + 1) * coord->dz(i, j + 1);
-      
-      // For left cell boundaries
-      common_factor = (coord->J(i, j) + coord->J(i, j - 1))
-                      / (sqrt(coord->g_22(i, j)) + sqrt(coord->g_22(i, j - 1)));
-
-      BoutReal flux_factor_lc = common_factor / (coord->dy(i, j) * coord->J(i, j));
-      BoutReal flux_factor_lm =
-          common_factor / (coord->dy(i, j - 1) * coord->J(i, j - 1));
-
-      BoutReal area_lc = common_factor * coord->dx(i, j) * coord->dz(i, j);
-#endif
-      for (int k = 0; k < mesh->LocalNz; k++) {
-#if BOUT_USE_METRIC_3D
-        // For right cell boundaries
-        BoutReal common_factor =
-            (coord->J(i, j, k) + coord->J(i, j + 1, k))
-            / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j + 1, k)));
-        
-        BoutReal flux_factor_rc =
-            common_factor / (coord->dy(i, j, k) * coord->J(i, j, k));
-        BoutReal flux_factor_rp =
-            common_factor / (coord->dy(i, j + 1, k) * coord->J(i, j + 1, k));
-
-        BoutReal area_rp = common_factor * coord->dx(i, j + 1, k) * coord->dz(i, j + 1, k);
-
-        // For left cell boundaries
-        common_factor = (coord->J(i, j, k) + coord->J(i, j - 1, k))
-                        / (sqrt(coord->g_22(i, j, k)) + sqrt(coord->g_22(i, j - 1, k)));
-
-        BoutReal flux_factor_lc =
-            common_factor / (coord->dy(i, j, k) * coord->J(i, j, k));
-        BoutReal flux_factor_lm =
-            common_factor / (coord->dy(i, j - 1, k) * coord->J(i, j - 1, k));
-
-        BoutReal area_lc = common_factor * coord->dx(i, j, k) * coord->dz(i, j, k);
-#endif
-
-        ////////////////////////////////////////////
-        // Reconstruct f at the cell faces
-        // This calculates s.R and s.L for the Right and Left
-        // face values on this cell
-
-        // Reconstruct f at the cell faces
-        Stencil1D s;
-        s.c = f(i, j, k);
-        s.m = f(i, j - 1, k);
-        s.p = f(i, j + 1, k);
-
-        cellboundary(s); // Calculate s.R and s.L
-
-        ////////////////////////////////////////////
-        // Reconstruct v at the cell faces
-        Stencil1D sv;
-        sv.c = v(i, j, k);
-        sv.m = v(i, j - 1, k);
-        sv.p = v(i, j + 1, k);
-
-        cellboundary(sv); // Calculate sv.R and sv.L
-
-        ////////////////////////////////////////////
-        // Right boundary
-
-        BoutReal flux;
-
-        if (mesh->lastY(i) && (j == mesh->yend) && !mesh->periodicY(i)) {
-          // Last point in domain
-
-          // Calculate velocity at right boundary (y+1/2)
-          BoutReal vpar = 0.5 * (v(i, j, k) + v(i, j + 1, k));
-
-          BoutReal bndryval = 0.5 * (s.c + s.p);
-          if (fixflux) {
-            // Use mid-point to be consistent with boundary conditions
-            flux = bndryval * vpar;
-          } else {
-            // Add flux due to difference in boundary values
-            flux = s.R * vpar + wave_speed(i, j, k) * (s.R - bndryval);
-          }
-
-        } else {
-          // Maximum wave speed in the two cells
-          BoutReal amax = BOUTMAX(wave_speed(i, j, k), wave_speed(i, j + 1, k),
-                                  fabs(v(i, j, k)), fabs(v(i, j + 1, k)));
-
-          flux = s.R * 0.5 * (sv.R + amax);
-        }
-
-        result(i, j, k) += flux * flux_factor_rc;
-        result(i, j + 1, k) -= flux * flux_factor_rp;
-
-        flow_ylow(i, j + 1, k) += flux * area_rp;
-
-        ////////////////////////////////////////////
-        // Calculate at left boundary
-
-        if (mesh->firstY(i) && (j == mesh->ystart) && !mesh->periodicY(i)) {
-          // First point in domain
-          BoutReal bndryval = 0.5 * (s.c + s.m);
-          BoutReal vpar = 0.5 * (v(i, j, k) + v(i, j - 1, k));
-          if (fixflux) {
-            // Use mid-point to be consistent with boundary conditions
-            flux = bndryval * vpar;
-          } else {
-            // Add flux due to difference in boundary values
-            flux = s.L * vpar - wave_speed(i, j, k) * (s.L - bndryval);
-          }
-        } else {
-
-          // Maximum wave speed in the two cells
-          BoutReal amax = BOUTMAX(wave_speed(i, j, k), wave_speed(i, j - 1, k),
-                                  fabs(v(i, j, k)), fabs(v(i, j - 1, k)));
-
-          flux = s.L * 0.5 * (sv.L - amax);
-        }
-
-        result(i, j, k) -= flux * flux_factor_lc;
-        result(i, j - 1, k) += flux * flux_factor_lm;
-
-        flow_ylow(i, j, k) += flux * area_lc;
-      }
-    }
-  }
-  if (are_unaligned) {
-    flow_ylow = fromFieldAligned(flow_ylow, "RGN_NOBNDRY");
-  }
-  return are_unaligned ? fromFieldAligned(result, "RGN_NOBNDRY") : result;
+  return result;
 }
+
+
+inline const Field3D Div_par(const Field3D& v_in){
+  Coordinates* coord = v_in.getCoordinates();
+  ASSERT1(v_in.hasParallelSlices());
+  const auto& v_up = v_in.yup();
+  const auto& v_down = v_in.ydown();
+  Field3D result{emptyFrom(v_in)};
+  BOUT_FOR(i, v_in.getRegion("RGN_NOBNDRY")) {
+    const auto iyp = i.yp();
+    const auto iym = i.ym();
+    BoutReal flux_up = 0.0;
+    BoutReal flux_down = 0.0;
+    flux_up = 0.5 * (v_in[i] + v_up[iyp]) * coord->cell_area_yhigh()[i];
+    flux_down = 0.5 * (v_in[i] + v_down[iym]) * coord->cell_area_ylow()[i];
+    result[i] = (flux_up - flux_down) / (coord->cell_volume()[i]);
+  }
+  return result;
+}  
 
 /// Div ( a g Grad_perp(f) )  -- Perpendicular gradient-driven advection
 ///
@@ -941,8 +667,8 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
 /// the advects the upwind cell edge.
 ///
 /// 1st order upwinding is used in Y.
-template <typename CellEdges = MC>
-const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Field3D& f) {
+
+inline const Field3D Div_a_Grad_perp_limit(const Field3D& a, const Field3D& g, const Field3D& f) {
 #if BOUT_USE_METRIC_3D
   throw BoutException("Currently not supported with FCI");
 #else

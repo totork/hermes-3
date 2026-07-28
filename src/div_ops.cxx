@@ -78,13 +78,6 @@ BoutReal BOUTMIN(const BoutReal& a, const BoutReal& b, const BoutReal& c,
   return (r1 < r2) ? r1 : r2;
 }
 
-struct Stencil1D {
-  // Cell centre values
-  BoutReal c, m, p, mm, pp;
-
-  // Left and right cell face values
-  BoutReal L, R;
-};
 
 // First order upwind for testing
 void Upwind(Stencil1D& n, const BoutReal h) { n.L = n.R = n.c; }
@@ -1850,7 +1843,6 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
     *flow_zlow /= volume;
   }
   result /= volume;
-  setName(result, "dagp_fv({}, {})", a.name, f.name);
   return result;
 }
 
@@ -2042,9 +2034,9 @@ const Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Fi
   return result;
 }
 
-const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
+const Field3D Div_par_K_Grad_par_H3(const Field3D& Kin, const Field3D& fin,
                                      Field3D& flow_ylow, bool bndry_flux) {
-  TRACE("FV::Div_par_K_Grad_par_mod");
+  TRACE("FV::Div_par_K_Grad_par_H3");
 
   ASSERT2(Kin.getLocation() == fin.getLocation());
 
@@ -2062,12 +2054,8 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
     auto B_down = coord->Bxy.ydown();
 
     auto g_22 = coord->g_22;
-    auto g_22_up = coord->g_22.yup();
-    auto g_22_down = coord->g_22.ydown();
 
     auto dy = coord->dy;
-    auto dy_up = coord->dy.yup();
-    auto dy_down = coord->dy.ydown();
 
     auto K_up = Kin.yup();
     auto K_down = Kin.ydown();
@@ -2078,44 +2066,26 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
     Field3D result{zeroFrom(fin)};
     flow_ylow = zeroFrom(fin);
 
+    const auto cell_area_yhigh = coord->cell_area_yhigh();
+    const auto cell_area_ylow = coord->cell_area_ylow();
+    const auto cell_volume = coord->cell_volume();
+
     BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
       const auto iyp = i.yp();
       const auto iym = i.ym();
 
-      // // parallel lengths
-      // BoutReal dl = dy[i] * sqrt(g_22[i]);
-      // BoutReal dl_up = dy_up[iyp] * sqrt(g_22_up[iyp]);
-      // BoutReal dl_down = dy_down[iym] * sqrt(g_22_down[iym]);
-
-      // BoutReal gradient_up = 2 * (f_up[iyp] - fin[i]) / (dl_up + dl);
-      // BoutReal gradient_down = 2 * (fin[i] - f_down[iym]) / (dl + dl_down);
-
-      // result[i] = B[i]
-      //             * (gradient_up * (K_up[iyp] + Kin[i]) / (B_up[iyp] + B[i])
-      //                - gradient_down * (K_down[iym] + Kin[i]) / (B_down[iym] + B[i]))
-      //             / dl;
-
-      // Upper cell edge
       BoutReal c = 0.5 * (Kin[i] + K_up[iyp]);      
-      BoutReal gradient =  (f_up[iyp] - fin[i]) / (coord->dy[i] * sqrt(coord->g_22_cell_yhigh[i]));
+      BoutReal gradient =  (f_up[iyp] - fin[i]) / (coord->dy[i] * sqrt(coord->g_22[i]));
 
-      BoutReal flux_up = c * coord->cellarea_yup[i] * gradient ;
+      BoutReal flux_up = c * cell_area_yhigh[i] * gradient ;
 
       // Lower cell edge
       c = 0.5 * (Kin[i] + K_down[iym]);             
-      gradient =  (fin[i] - f_down[iym]) / (coord->dy[i] * sqrt(coord->g_22_cell_ylow[i]));
+      gradient =  (fin[i] - f_down[iym]) / (coord->dy[i] * sqrt(coord->g_22[i]));
 
-      BoutReal flux_down = c * coord->cellarea_ydown[i] * gradient ;
-      if (mesh->isFci() && !bndry_flux){
-	if (coord->has_bndry_yup[i] == true) {
-	  flux_up = 0.0;
-	}
-	if (coord->has_bndry_ydown[i] == true) {
-	  flux_down = 0.0;
-	}
-      }
+      BoutReal flux_down = c * cell_area_ylow[i] * gradient ;
       
-      result[i] = (flux_up - flux_down) / (coord->cellvolume[i]);
+      result[i] = (flux_up - flux_down) / (cell_volume[i]);
     }
 
     return result;

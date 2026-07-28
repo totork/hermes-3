@@ -5,8 +5,6 @@
 #include "component.hxx"
 #include <bout/yboundary_regions.hxx>
 
-extern YBoundary yboundary;
-
 /// Convert fluxes of species at boundaries
 ///
 /// Since this must be calculated after boundary fluxes (e.g. sheath),
@@ -69,7 +67,7 @@ private:
   Field3D density_source, energy_source; ///< Recycling particle and energy sources for all locations
   Field3D energy_flow_ylow, energy_flow_xlow; ///< Cell edge fluxes used for calculating fast recycling energy source
   Field3D particle_flow_xlow; ///< Radial wall particle fluxes for recycling calc. No need to get poloidal from here, it's calculated from sheath velocity
-
+  YBoundary yboundary;
   Field2D is_pump; ///< 1 = pump, 0 = no pump. Works only in SOL/PFR. Provided by user in grid file.
 };
 

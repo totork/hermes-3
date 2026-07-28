@@ -83,7 +83,6 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
 }
 
 void AnomalousDiffusion3D::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& species = state["species"][name];
 
@@ -111,7 +110,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
 
   if (include_D_par) {
     Field3D dummy;
-    add(species["density_source"], Div_par_K_Grad_par_mod(anomalous_D_par, N, dummy, false));
+    add(species["density_source"], Div_par_K_Grad_par_H3(anomalous_D_par, N, dummy, false));
   }
   
   if (include_D) {
@@ -175,9 +174,7 @@ void AnomalousDiffusion3D::transform(Options& state) {
       add(species["momentum_source"],
           Div_a_Grad_perp_curv(anomalous_nu * AA * N, V));
     } else {
-      add(species["momentum_source"],
-	  setName((*dagp)(anomalous_nu * AA * N, V, flow_xlow, flow_zlow, upwind),
-		  "dagp_fv(anomalous_nu * AA * N{}, V{}", name, name));
+      add(species["momentum_source"], (*dagp)(anomalous_nu * AA * N, V, flow_xlow, flow_zlow, upwind));
       add(species["momentum_flow_xlow"], flow_xlow);
       add(species["momentum_flow_zlow"], flow_zlow);
     }
@@ -188,7 +185,6 @@ void AnomalousDiffusion3D::transform(Options& state) {
 }
 
 void AnomalousDiffusion3D::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -198,7 +194,6 @@ void AnomalousDiffusion3D::outputVars(Options& state) {
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
 
   if (diagnose) {
-      AUTO_TRACE();
       // Save particle, momentum and energy channels
       if (include_chi) {
 	set_with_attrs(state[std::string("TE_P") + name + std::string("_perpconduction")], TE_conduction,

@@ -2,6 +2,11 @@
 #ifndef EVOLVE_MOMENTUM_H
 #define EVOLVE_MOMENTUM_H
 
+#include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
+#include <bout/solver.hxx>
+
+
 #include "component.hxx"
 
 /// Evolve parallel momentum
@@ -52,6 +57,8 @@ private:
   BoutReal scale_ExB;
   int mode_div_par_fvv;
 
+  Field3D Nlim;
+  
   BoutReal hyper_z;  ///< Hyper-diffusion
   BoutReal hyper_nv;
   std::string Vname;

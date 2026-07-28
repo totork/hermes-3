@@ -7,6 +7,7 @@
 #include "../include/div_ops.hxx"
 
 #include "../include/electron_viscosity.hxx"
+using bout::globals::mesh;
 
 ElectronViscosity::ElectronViscosity(std::string name, Options& alloptions, Solver*) {
   auto& options = alloptions[name];
@@ -19,7 +20,6 @@ ElectronViscosity::ElectronViscosity(std::string name, Options& alloptions, Solv
 }
 
 void ElectronViscosity::transform(Options& state) {
-  AUTO_TRACE();
 
   Options& species = state["species"]["e"];
 
@@ -38,8 +38,9 @@ void ElectronViscosity::transform(Options& state) {
 
   Coordinates* coord = P.getCoordinates();
   const Field3D Bxy = coord->Bxy;
-  const Field3D sqrtB = sqrt(Bxy);
-
+  Field3D sqrtB = sqrt(Bxy);
+  mesh->communicate(sqrtB);
+  
   // Parallel electron viscosity
   Field3D eta = (4. / 3) * 0.73 * P * tau;
 
@@ -61,12 +62,13 @@ void ElectronViscosity::transform(Options& state) {
   // Save term for output diagnostic
   // viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
   Field3D dummy;
-  viscosity = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, true);
+  
+  ASSERT2(V.hasParallelSlices());
+  viscosity = sqrtB * Div_par_K_Grad_par_H3(eta.asField3DParallel() / Bxy, V.asField3DParallel() * sqrtB, dummy, true);
   add(species["momentum_source"], viscosity);
 }
 
 void ElectronViscosity::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);

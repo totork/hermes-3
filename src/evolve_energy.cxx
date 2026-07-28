@@ -16,7 +16,6 @@ using bout::globals::mesh;
 
 EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   auto& options = alloptions[name];
 
@@ -127,8 +126,8 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices())
-      / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22)
+      / (coord->J * coord->Bxy);
   } else {
     // Clebsch coordinate system
     bracket_factor = 1.0;
@@ -136,7 +135,6 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
 }
 
 void EvolveEnergy::transform(Options& state) {
-  AUTO_TRACE();
 
   if (evolve_log) {
     // Evolving logE, but most calculations use E
@@ -203,7 +201,6 @@ void EvolveEnergy::transform(Options& state) {
 }
 
 void EvolveEnergy::finally(const Options& state) {
-  AUTO_TRACE();
 
   /// Get the section containing this species
   const auto& species = state["species"][name];
@@ -271,7 +268,7 @@ void EvolveEnergy::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(E) -= FV::Div_par_mod<hermes::Limiter>(E + P, V, fastest_wave, flow_ylow);
+    ddt(E) -= FV::Div_par_H3(E + P, V, fastest_wave, flow_ylow);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -343,7 +340,7 @@ void EvolveEnergy::finally(const Options& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     Field3D flow_ylow_conduction;
-    ddt(E) += Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    ddt(E) += Div_par_K_Grad_par_H3(kappa_par, T, flow_ylow_conduction, false);
     flow_ylow += flow_ylow_conduction;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -413,7 +410,6 @@ void EvolveEnergy::finally(const Options& state) {
 }
 
 void EvolveEnergy::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

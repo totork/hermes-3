@@ -2,10 +2,9 @@
 #include <bout/difops.hxx>
 
 #include "../include/zero_current.hxx"
-
+#include <bout/mesh.hxx>
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : name(name) {
-  AUTO_TRACE();
   Options &options = alloptions[name];
 
   charge = options["charge"].doc("Particle charge. electrons = -1");
@@ -14,7 +13,6 @@ ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
 }
 
 void ZeroCurrent::transform(Options &state) {
-  AUTO_TRACE();
 
   // Current due to other species
   Field3D current;
@@ -39,12 +37,16 @@ void ZeroCurrent::transform(Options &state) {
       const BoutReal charge = get<BoutReal>(species["charge"]);
       const Field3D V = getNoBoundary<Field3D>(species["velocity"]);
 
+      ASSERT2(N.hasParallelSlices());
+      ASSERT2(V.hasParallelSlices());
+
+      
       if (!current.isAllocated()) {
         // Not yet allocated -> Set to the value
         // This avoids having to set to zero initially and add the first time
-        current = charge * N * V;
+        current = charge * N.asField3DParallel() * V.asField3DParallel();
       } else {
-        current += charge * N * V;
+        current += charge * N.asField3DParallel() * V.asField3DParallel();
       }
     }
   }
@@ -61,12 +63,15 @@ void ZeroCurrent::transform(Options &state) {
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * floor(N, 1e-5));
+  ASSERT2(N.hasParallelSlices());
+  
+  velocity = current.asField3DParallel() / (-charge * N.asField3DParallel());
+
+  ASSERT2(velocity.hasParallelSlices());
   set(species["velocity"], velocity);
 }
 
 void ZeroCurrent::outputVars(Options &state) {
-  AUTO_TRACE();
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
   // Save the velocity

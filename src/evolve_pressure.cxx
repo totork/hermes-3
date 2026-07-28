@@ -19,11 +19,9 @@ using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
     : name(name) {
-  AUTO_TRACE();
 
   auto& options = alloptions[name];
 
-  yboundary.init(options);
 
   mode_div_par = options["mode_div_par"]
                    .doc("Which mode to use for the parallel divergence. 0 is the standard mode, 1 is with slope limiter.")
@@ -33,9 +31,6 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-5);
 
-  low_n_diffuse_perp = options["low_n_diffuse_perp"]
-                           .doc("Perpendicular diffusion at low density")
-                           .withDefault<bool>(false);
 
   spitzer_conductivity = options["spitzer_conductivity"]
                            .doc("Use spitzer conductivity instead of the whole collision frequency?")
@@ -48,20 +43,12 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
 
-  
-  low_T_diffuse_perp = options["low_T_diffuse_perp"].doc("Add cross-field diffusion at low temperature?")
-    .withDefault<bool>(false);
 
   pressure_floor = density_floor * temperature_floor;
 
   scale_ExB = options["scale_ExB"]
                    .doc("Scale ExB flow?")
                    .withDefault<BoutReal>(1.0);
-  
-  low_p_diffuse_perp = options["low_p_diffuse_perp"]
-                           .doc("Perpendicular diffusion at low pressure")
-                           .withDefault<bool>(false);
-
   
 
   isMMS = options["mms"].withDefault<bool>(false);
@@ -233,7 +220,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
   } else {
     // Clebsch coordinate system
     bracket_factor = 1.0;
@@ -266,11 +253,13 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
 
     tau_1 = (Cs0 / Lnorm ) * tau_0;    
   }
+
+  Pfloor.setBoundary(std::string("P") + name);
+
   
 }
 
 void EvolvePressure::transform(Options& state) {
-  AUTO_TRACE();
 
   if (evolve_log) {
     // Evolving logP, but most calculations use P
@@ -281,39 +270,6 @@ void EvolvePressure::transform(Options& state) {
   mesh->communicate(P);
   P.applyParallelBoundary();
 
-  if (neumann_boundary_average_z) {
-    // Take Z (usually toroidal) average and apply as X (radial) boundary condition
-    if (mesh->firstX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal Pavg = 0.0; // Average P in Z
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          Pavg += P(mesh->xstart, j, k);
-        }
-        Pavg /= mesh->LocalNz;
-
-        // Apply boundary condition
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          P(mesh->xstart - 1, j, k) = 2. * Pavg - P(mesh->xstart, j, k);
-          P(mesh->xstart - 2, j, k) = P(mesh->xstart - 1, j, k);
-        }
-      }
-    }
-
-    if (mesh->lastX()) {
-      for (int j = mesh->ystart; j <= mesh->yend; j++) {
-        BoutReal Pavg = 0.0; // Average P in Z
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          Pavg += P(mesh->xend, j, k);
-        }
-        Pavg /= mesh->LocalNz;
-
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          P(mesh->xend + 1, j, k) = 2. * Pavg - P(mesh->xend, j, k);
-          P(mesh->xend + 2, j, k) = P(mesh->xend + 1, j, k);
-        }
-      }
-    }
-  }
 
   auto& species = state["species"][name];
 
@@ -321,19 +277,22 @@ void EvolvePressure::transform(Options& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
-  Field3D Pfloor = floor(P, 0.0);
-  T = Pfloor / floor(N, density_floor);
-  Pfloor = N * T; // Ensure consistency
+  Pfloor = floor(P, 0.0);
+  Pfloor.applyBoundary();
+  mesh->communicate(Pfloor);
+  Pfloor.applyParallelBoundary();
+  
+  T = Pfloor.asField3DParallel() / N;
+  Pfloor = N.asField3DParallel() * T; // Ensure consistency
 
-
+  ASSERT2(Pfloor.hasParallelSlices());
   set(species["pressure"], Pfloor);
-  mesh->communicate(T);
-  T.applyParallelBoundary("parallel_neumann_o1");
+
+  ASSERT2(T.hasParallelSlices());
   set(species["temperature"], T);
 }
 
 void EvolvePressure::finally(const Options& state) {
-  AUTO_TRACE();
 
   /// Get the section containing this species
   const auto& species = state["species"][name];
@@ -343,9 +302,9 @@ void EvolvePressure::finally(const Options& state) {
   if (!P.isFci()) {
     P.clearParallelSlices();
   }
-  P.setBoundaryTo(get<Field3D>(species["pressure"]));
-  Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
-
+  P = get<Field3D>(species["pressure"]);
+  Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
@@ -376,7 +335,7 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      TE_parflow = -FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par) - (2. / 3) * Pfloor * Div_par(V);
+      TE_parflow = -FV::Div_par_H3(P, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par) - (2. / 3) * Pfloor * FV::Div_par(V);
       
       ddt(P) += TE_parflow;
       // Work done. This balances energetically a term in the momentum equation
@@ -387,7 +346,7 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      TE_parflow = -(5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par) + (2. / 3) * V * Grad_par(P);
+      TE_parflow = -(5. / 3) * FV::Div_par_H3(P, V, fastest_wave, flow_ylow, false, dissipative, true, mode_div_par) + (2. / 3) * V * Grad_par(P);
 
       ddt(P) += TE_parflow;
     }
@@ -424,19 +383,6 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N) + FV::Div_par_K_Grad_par(low_n_coeff, P);
   }
 
-  if (low_n_diffuse_perp) {
-    ddt(P) += Div_Perp_Lap_FV_Index(density_floor / floor(N, 1e-3 * density_floor), P, true);
-  }
-
-  if (low_T_diffuse_perp) {
-    ddt(P) += 1e-4 * Div_Perp_Lap_FV_Index(floor(temperature_floor / floor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-                                           T, false);
-  }
-
-  if (low_p_diffuse_perp) {
-    Field3D Plim = floor(P, 1e-3 * pressure_floor);
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P, true);
-  }
 
 
   if (T_lowsource > 0.0) {
@@ -512,15 +458,10 @@ void EvolvePressure::finally(const Options& state) {
       kappa_par.applyParallelBoundary("parallel_neumann_o1");
     }
 
-    yboundary.iter([&](auto& region) {
-      for (auto& pnt : region) {
-	pnt.ynext(kappa_par) = kappa_par[pnt.ind()];
-      }
-    });
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    TE_conduction = (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    TE_conduction = (2. / 3) * Div_par_K_Grad_par_H3(kappa_par, T, flow_ylow_conduction, false);
     ddt(P) += TE_conduction;
     
     if (    flow_ylow_conduction.isAllocated()) {
@@ -649,7 +590,6 @@ void EvolvePressure::finally(const Options& state) {
 }
 
 void EvolvePressure::outputVars(Options& state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

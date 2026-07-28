@@ -1,6 +1,11 @@
 #include <bout/fv_ops.hxx>
 #include <bout/vecops.hxx>
 #include <bout/yboundary_regions.hxx>
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
+#include <bout/globals.hxx>
+
+
 #include "../include/diamagnetic_drift_fci.hxx"
 using bout::globals::mesh;
 
@@ -10,7 +15,7 @@ DiamagneticDriftFCI::DiamagneticDriftFCI(std::string name, Options& alloptions,
   // Get options for this component
   auto& options = alloptions[name];
 
-  yboundary.init(options);
+
 
   // Normalise
 
@@ -22,7 +27,7 @@ DiamagneticDriftFCI::DiamagneticDriftFCI(std::string name, Options& alloptions,
   const auto coord = mesh->getCoordinates();
   if (mesh->isFci()) {
 
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices()) / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22) / (coord->J * coord->Bxy);
 
     logB = log(coord->Bxy);
     logB.applyBoundary("neumann_o2");

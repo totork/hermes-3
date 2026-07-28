@@ -42,7 +42,6 @@ struct SimplePump : public Component {
     };
 
     void outputVars(Options& state) override {
-    AUTO_TRACE();
     if (diagnose) {
 
       set_with_attrs(

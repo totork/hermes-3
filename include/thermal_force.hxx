@@ -3,6 +3,7 @@
 #define THERMAL_FORCE_H
 
 #include "component.hxx"
+#include <bout/mesh.hxx>
 
 /// Simple calculation of the thermal force
 ///

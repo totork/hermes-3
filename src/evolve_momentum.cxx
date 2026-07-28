@@ -19,11 +19,10 @@ BoutReal floor(BoutReal value, BoutReal min) {
 
 using bout::globals::mesh;
 
-Options * tracking{nullptr};
+
 
 EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *solver) :
   name(name), Vname(fmt::format("V{}", name)) {
-  AUTO_TRACE();
   
   // Evolve the momentum in time
   solver->add(NV, std::string("NV") + name);
@@ -94,8 +93,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
     const auto coord = mesh->getCoordinates();
     // Note: This is 1 for a Clebsch coordinate system
     //       Remove parallel slices before operations
-    bracket_factor = sqrt(coord->g_22.withoutParallelSlices())
-      / (coord->J.withoutParallelSlices() * coord->Bxy);
+    bracket_factor = sqrt(coord->g_22)
+      / (coord->J * coord->Bxy);
   } else {
     // Clebsch coordinate system
     bracket_factor = 1.0;
@@ -109,24 +108,23 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
   disable_ddt = nv_options["disable_ddt"]
     .withDefault<bool>(false);
 
+  Nlim.setBoundary(std::string("N") + name);
+
+  
 }
 
 void EvolveMomentum::transform(Options &state) {
-  AUTO_TRACE();
 
-  tracking = ddt(NV).getTracking();
+
   auto& species = state["species"][name];
-  if (tracking) {
-    saveParallel(*tracking, fmt::format("NV{}_initial0", name), NV);
-    species["momentum_source"] = zeroFrom(ddt(NV));
-    auto src = mpark::get_if<Field3D>(&species["momentum_source"].value);
-    src->enableTracking(fmt::format("ddt_NV{}_momentum", name), *tracking);
-    setName(*src, "NV{}_momentum", name);
-  }
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
-  Field3D Nlim = floor(N, density_floor);
+  Nlim = floor(N, density_floor);
+  Nlim.applyBoundary();
+  mesh->communicate(Nlim);
+  Nlim.applyParallelBoundary();
+  
   BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   NV.applyBoundary();
@@ -134,27 +132,24 @@ void EvolveMomentum::transform(Options &state) {
   NV.applyParallelBoundary();
 
   
-  V = NV / (AA * Nlim);
+  V = NV.asField3DParallel() / (AA * Nlim.asField3DParallel());
   V.name = Vname;
-  mesh->communicate(V);
-  V.applyParallelBoundary();
+  ASSERT2(V.hasParallelSlices());
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
   NV = AA * N * V; // Re-calculate consistent with V and N
 
-  if (tracking) {
-    saveParallel(*tracking, fmt::format("NV{}_initial", name), NV);
-    saveParallel(*tracking, fmt::format("N{}_initial",name), N);
-    saveParallel(*tracking, fmt::format("V{}_initial", name), V);
-  }
   // Note: Now NV and NV_solver will differ when N < density_floor
-  NV_err = setName(NV - NV_solver, "correction(NV - NV_solver)"); // This is used in the finally() function
+  NV_err = NV - NV_solver;
+
+  NV.applyBoundary();
+  mesh->communicate(NV);
+  NV.applyParallelBoundary();
   set(species["momentum"], NV);
 }
 
 void EvolveMomentum::finally(const Options &state) {
-  AUTO_TRACE();
 
   auto& species = state["species"][name];
   BoutReal AA = get<BoutReal>(species["AA"]);
@@ -166,8 +161,11 @@ void EvolveMomentum::finally(const Options &state) {
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  Field3D Nlim = floor(N, density_floor);
-
+  Nlim = floor(N, density_floor);
+  Nlim.applyBoundary();
+  mesh->communicate(Nlim);
+  Nlim.applyParallelBoundary();
+  
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
   if (state.isSet("fastest_wave")) {
@@ -213,7 +211,7 @@ void EvolveMomentum::finally(const Options &state) {
         
         // This is Z * Apar * dn/dt, keeping just leading order terms
         Field3D dndt = density_source
-          - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, dummy)
+          - FV::Div_par_H3(N, V, fastest_wave, dummy)
           ;
 
         if (exb_advection) {
@@ -248,9 +246,10 @@ void EvolveMomentum::finally(const Options &state) {
 
   if (isMMS) {
     Field3D NVV = NV * V;
-    ddt(NV) -= Div_par(NVV);
+    mesh->communicate(NVV);
+    ddt(NV) -= FV::Div_par(NVV);
   } else {
-    ddt(NV) -= AA * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave, fix_momentum_boundary_flux, mode_div_par_fvv);
+    ddt(NV) -= AA * FV::Div_par_fvv_H3(Nlim, V, fastest_wave, fix_momentum_boundary_flux, mode_div_par_fvv);
   }
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
@@ -297,7 +296,7 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Other sources/sinks
   if (species.isSet("momentum_source")) {
-    ddt(NV) += setName(get<Field3D>(species["momentum_source"]), "momentum_source {}", momentum_source.name);
+    ddt(NV) += get<Field3D>(species["momentum_source"]);
   }
 
   // If N < density_floor then NV and NV_solver may differ
@@ -342,7 +341,6 @@ void EvolveMomentum::finally(const Options &state) {
 }
 
 void EvolveMomentum::outputVars(Options &state) {
-  AUTO_TRACE();
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);

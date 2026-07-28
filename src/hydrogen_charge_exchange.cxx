@@ -1,5 +1,5 @@
 #include "../include/hydrogen_charge_exchange.hxx"
-
+#include <bout/mesh.hxx>
 void HydrogenChargeExchange::calculate_rates(Options& atom1, Options& ion1,
                                              Options& atom2, Options& ion2,
                                              Field3D &R,

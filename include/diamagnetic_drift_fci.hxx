@@ -2,7 +2,7 @@
 #ifndef DIAMAGNETIC_DRIFT_FCI_H
 #define DIAMAGNETIC_DRIFT_FCI_H
 #include <bout/vectormetric.hxx>
-#include <bout/yboundary_regions.hxx>
+
 #include "component.hxx"
 /// Calculate diamagnetic flows
 struct DiamagneticDriftFCI : public Component {
@@ -19,7 +19,7 @@ struct DiamagneticDriftFCI : public Component {
 private:
   Coordinates::FieldMetric bracket_factor;
   Field3D logB;
-  YBoundary yboundary;
+
 };
 
 

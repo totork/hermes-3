@@ -3,7 +3,6 @@
 #include <bout/fv_ops.hxx>
 
 ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*) {
-  AUTO_TRACE();
   Options& options = alloptions[name];
 
   Bsq = SQ(bout::globals::mesh->getCoordinates()->Bxy);
@@ -13,7 +12,6 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
 }
 
 void ClassicalDiffusion::transform(Options &state) {
-  AUTO_TRACE();
   Options& allspecies = state["species"];
   
   // Particle diffusion coefficient
@@ -94,7 +92,6 @@ void ClassicalDiffusion::transform(Options &state) {
 }
 
 void ClassicalDiffusion::outputVars(Options &state) {
-  AUTO_TRACE();
 
   if (diagnose) {
     // Normalisations
