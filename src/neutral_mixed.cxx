@@ -416,7 +416,7 @@ void NeutralMixed::finally(const Options& state) {
     Field3D Dmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps));
     BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
   } else if (limit_length > 0.0) {
-    Field3D denom = 1.0 + (Dnn / (sqrt(Tnlim / AA) * Nnlim * limit_length));
+    Field3D denom = 1.0 + (Dnn / (sqrt(Tnlim / AA) * limit_length));
     Dnn = Dnn / denom;
   }
 
