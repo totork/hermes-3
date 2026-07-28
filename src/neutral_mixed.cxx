@@ -14,7 +14,21 @@ using bout::globals::mesh;
 
 using ParLimiter = FV::Upwind;
 
+const Field3D logg(const Field3D a) {
+  ASSERT2(a.hasParallelSlices());
+  Field3DParallel result;
+  result.allocate();
+  BOUT_FOR(i, a.getRegion("RGN_NOY")) {
+    const auto iyp = i.yp();
+    const auto iym = i.ym();
+    result[i] = log(a[i]);
+    result.yup()[iyp] = log(a.yup()[iyp]);
+    result.ydown()[iym] = log(a.ydown()[iym]);
 
+  }
+  ASSERT2(result.hasParallelSlices());
+  return result.asField3D();
+}
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
   : name(name), yboundary(YBndryType::all, nullptr, *mesh) {
@@ -228,7 +242,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     DnnNn.setBoundary(std::string("Dnn") + name);
     DnnPn.setBoundary(std::string("Dnn") + name);
     DnnNVn.setBoundary(std::string("Dnn") + name);
-  }
+  } 
+
+
+  
   if (Nn.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
   }
@@ -349,10 +366,7 @@ void NeutralMixed::finally(const Options& state) {
   Nnlim = floor(Nn.asField3DParallel(), density_floor);
   Tnlim = floor(Tn.asField3DParallel(), temperature_floor);
   
-  logPnlim = log(Pnlim);
-  logPnlim.applyBoundary("free_o2");
-  mesh->communicate(logPnlim);
-  logPnlim.applyParallelBoundary("parallel_neumann_o1");
+  logPnlim = logg(Pnlim);
   
 
 
@@ -487,6 +501,7 @@ void NeutralMixed::finally(const Options& state) {
   ASSERT2(DnnNn.hasParallelSlices());
   ASSERT2(DnnNVn.hasParallelSlices());
   ASSERT2(logPnlim.hasParallelSlices());
+  
   
   TRACE("Neutral density");
   if (!isMMS){
