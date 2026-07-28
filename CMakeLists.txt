@@ -250,10 +250,19 @@ if(HERMES_TESTS)
   enable_testing()
 
   if (BOUT_ENABLE_METRIC_3D)
-    add_custom_command(TARGET setup-test PRE_BUILD
-      COMMAND python3 ./generate_axial_circular.py
+
+    find_program(PYTHON_EXECUTABLE
+      NAMES python3.12 python3
+      REQUIRED
+    )
+
+    add_custom_command(
+      TARGET setup-test PRE_BUILD
+      COMMAND ${PYTHON_EXECUTABLE} ./generate_axial_circular.py
+      COMMAND ${PYTHON_EXECUTABLE} ./create_grids.py
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/grids
     )
+    
     file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/grids ${CMAKE_CURRENT_BINARY_DIR}/grids SYMBOLIC)
   endif()
   
