@@ -6,6 +6,9 @@ import os
 import sys
 
 
+force = "-f" in sys.argv or "--force" in sys.argv
+
+
 class ThisField(Slab):
     def __init__(self,By, Byprime, xcentre, Bz = 0.0):
         self.By = By
@@ -47,6 +50,12 @@ def create_directory(path):
 
 
 def create_grid(folder, nx, ny, nz, BC = False, inp_Ly = None):
+
+    filename = folder + f"MMS_straight_slab_{nx}_{ny}_{nz}_{BC}.fci.grid.nc"
+    
+    if os.path.exists(filename) and not force:
+        print(filename, " exists")
+        return 0
     
     rshift = 2.0
     magnetic_field = ThisField(By=1.0, xcentre = rshift, Byprime = -0.1)
@@ -78,8 +87,6 @@ def create_grid(folder, nx, ny, nz, BC = False, inp_Ly = None):
         maps["forward_xt_prime"][:,-1,:] = nx-1
         maps["backward_xt_prime"][:,0,:] = nx-1
 
-
-    filename = folder + f"MMS_straight_slab_{nx}_{ny}_{nz}_{BC}.fci.grid.nc"
 
     with zoidberg.zoidberg.MapWriter(filename) as mw:
         mw.add_grid_field(rectangle, magnetic_field)
@@ -115,6 +122,11 @@ create_grid(folder_BC, 8,256,4, BC = True)
 
 
 def create_diving_grid(nx,ny,nz,Ly, filename):
+
+    if os.path.exists(filename) and not force:
+        print(filename, " exists")
+        return 0
+    
     magnetic_field = ThisField(By=1.0, xcentre = 1.0, Byprime = 0.0)
     Lz = 0.1    
     inner_pos = np.full(ny,1.0)
@@ -161,9 +173,12 @@ create_diving_grid(132, 32, 4, 35.0, folder_diving + "slab_diving_132_32_4_35.fc
 
 
 def create_limiter_grid(nx,ny,nz, filename):
+
+    if os.path.exists(filename) and not force:
+        print(filename, " exists")
+        return 0
+    
     magnetic_field = ThisField(By=1.0, xcentre = 1.0, Byprime = 0.0, Bz = 0.1)
-
-
 
     Lz = 0.5
     Ly = 1.5
@@ -222,6 +237,11 @@ create_limiter_grid(36, 4, 32, folder_limiter + "slab_limiter_36_4_32.fci.grid.n
 
 
 def create_blob_grid(nx,ny,nz, filename):
+
+    if os.path.exists(filename) and not force:
+        print(filename, " exists")
+        return 0
+    
     rshift = 1.5
     magnetic_field = BlobField(By=1.0 / rshift, xcentre = rshift, Byprime = -1.0 / (rshift**2))
     Lx = 0.05
