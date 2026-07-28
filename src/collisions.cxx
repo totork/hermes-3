@@ -196,12 +196,16 @@ void Collisions::transform(Options& state) {
                               * 2 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
 	  ASSERT2(std::isfinite(Ne[i]));
 	  ASSERT2(std::isfinite(v1sq));
-	  ASSERT2(std::isfinite(coulomb_log));
 	  ASSERT2(std::isfinite(Nelim));
 	  ASSERT2(std::isfinite(logTe));
-	  ASSERT2(std::isfinite(Telim))
+	  ASSERT2(std::isfinite(Telim));
 
-
+	  if (!std::isfinite(coulomb_log)) {
+            throw BoutException("Collisions e-e {}: coulomb_log {} at {}: Ne {}, logTe {}\n",
+                                kv.first, coulomb_log, i, Ne[i], logTe);
+          }
+	    
+	    
 	  
           ASSERT2(std::isfinite(nu));
           return nu;
@@ -392,7 +396,11 @@ void Collisions::transform(Options& state) {
 	    ASSERT2(std::isfinite(Nlim2));
 	    ASSERT2(std::isfinite(v1sq));
 	    ASSERT2(std::isfinite(v2sq));
-	    ASSERT2(std::isfinite(coulomb_log));
+
+	    if (!std::isfinite(coulomb_log)) {
+	      throw BoutException("Collisions i-i : coulomb_log {} at {}: Tlim1 {}, Tlim2 {}, Nlim1 {}, Nlim2 {}\n",
+				   coulomb_log, i, Tlim1, Tlim2, Nlim1, Nlim2);
+	    }
 	    
             // Collision frequency
             const BoutReal nu = SQ(charge1 * charge2) * Nlim2 * floor(coulomb_log, 1.0)
