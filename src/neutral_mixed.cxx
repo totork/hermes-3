@@ -315,8 +315,6 @@ void NeutralMixed::transform(Options& state) {
     NVn.applyParallelBoundary("parallel_neumann_o1");
   }
 
-  Nh_up = 0.0;
-  Nh_down = 0.0;
   
   // Set values in the state
   auto& localstate = state["species"][name];
@@ -351,8 +349,11 @@ void NeutralMixed::finally(const Options& state) {
   Nnlim = floor(Nn.asField3DParallel(), density_floor);
   Tnlim = floor(Tn.asField3DParallel(), temperature_floor);
   
-  logPnlim = log(Pnlim.asField3DParallel());
-
+  logPnlim = log(Pnlim);
+  logPnlim.applyBoundary("free_o2");
+  mesh->communicate(logPnlim);
+  logPnlim.applyParallelBoundary("parallel_neumann_o1");
+  
 
 
   ///////////////////////////////////////////////////////
@@ -394,18 +395,7 @@ void NeutralMixed::finally(const Options& state) {
     Dnn = 3.0 * lambdaLP * Dclassical;
   }
  
-  kappa_n = (5. / 2) * Dnn * Nn;
-
-  eta_n = AA * (2. / 5) * kappa_n;
-
-  
-  if (limit_length > 0.0) {
-
-    Field3D denom = 1.0 + (Dnn / (sqrt(Tnlim / AA) * Nnlim * limit_length));
-    Dnn = Dnn / denom;
-    kappa_n = kappa_n / denom;
-    eta_n = eta_n / denom;
-  } else if (flux_limit > 0.0) {
+  if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
     // Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
@@ -425,18 +415,11 @@ void NeutralMixed::finally(const Options& state) {
   Dnn.applyBoundary("neumann");
   mesh->communicate(Dnn);
   Dnn.applyParallelBoundary("parallel_neumann_o1");  
-  Dnn = floor(Dnn, 1e-10);
+  Dnn = floor(Dnn.asField3DParallel(), 1e-10);
 
-  kappa_n.applyBoundary("neumann");
-  mesh->communicate(kappa_n);
-  kappa_n.applyParallelBoundary("parallel_neumann_o1");
-  kappa_n = floor(kappa_n, 1e-10);
+  kappa_n = (5. / 2) * Dnn.asField3DParallel() * Nn;
 
-  eta_n.applyBoundary("neumann");
-  mesh->communicate(eta_n);
-  eta_n.applyParallelBoundary("parallel_neumann_o1");
-  eta_n = floor(eta_n, 1e-10);
-  
+  eta_n = AA * (2. / 5) * kappa_n.asField3DParallel();
 
   
   if (diffusion_limit > 0.0) {
@@ -452,9 +435,9 @@ void NeutralMixed::finally(const Options& state) {
 
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
-  DnnNn = Dnn * Nnlim;
-  DnnPn = Dnn * Pnlim;
-  DnnNVn = Dnn * Nnlim * Vn;
+  DnnNn = Dnn.asField3DParallel() * Nnlim;
+  DnnPn = Dnn.asField3DParallel() * Pnlim;
+  DnnNVn = (Dnn.asField3DParallel() * Nnlim) * Vn.asField3DParallel();
 
   if (!isMMS && parallel_dirichlet) {
     yboundary.iter([&](auto& pnt) {
@@ -493,11 +476,23 @@ void NeutralMixed::finally(const Options& state) {
   
   /////////////////////////////////////////////////////
   // Neutral density
+
+  ASSERT2(Nn.hasParallelSlices());
+  ASSERT2(Vn.hasParallelSlices());
+  ASSERT2(Pn.hasParallelSlices());
+  ASSERT2(Tn.hasParallelSlices());
+  ASSERT2(eta_n.hasParallelSlices());
+  ASSERT2(kappa_n.hasParallelSlices());
+  ASSERT2(Dnn.hasParallelSlices());
+  ASSERT2(DnnNn.hasParallelSlices());
+  ASSERT2(DnnNVn.hasParallelSlices());
+  ASSERT2(logPnlim.hasParallelSlices());
+  
   TRACE("Neutral density");
   if (!isMMS){
     ddt(Nn) = -FV::Div_par_H3(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
   } else {
-    ddt(Nn) = -Div_par(Nn.asField3DParallel() * Vn);
+    ddt(Nn) = -FV::Div_par(Nn.asField3DParallel() * Vn);
   }
   
 
@@ -538,26 +533,26 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  if (evolve_pressure) {
-  
+  if (evolve_pressure) {    
+    
     Field3D e_plus_p = Nnlim.asField3DParallel() * Tn + (2. / 3) * Pn.asField3DParallel();
 
     if (!isMMS) {
       ddt(Pn) = - FV::Div_par_H3(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
     } else {
-      ddt(Pn) = - Div_par(e_plus_p.asField3DParallel() * Vn);
+      ddt(Pn) = - FV::Div_par(e_plus_p.asField3DParallel() * Vn);
     }
     ddt(Pn) += (2. / 3) * Vn * Grad_par(Pn);
 
   
     if (!Pn.isFci()) {                                                                     // Perpendicular advection
-      ddt(Pn) +=  Div_a_Grad_perp_flows(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
+      ddt(Pn) +=  Div_a_Grad_perp_flows(Dnn.asField3DParallel() * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
     } else {
       bool upwind = false;
       if (!use_finite_difference) { 
-	ddt(Pn) +=  (*dagp)(Dnn * e_plus_p, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+	ddt(Pn) +=  (*dagp)(Dnn.asField3DParallel() * e_plus_p, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
       } else {
-	ddt(Pn) +=  Div_a_Grad_perp_curv(Dnn * e_plus_p, logPnlim);
+	ddt(Pn) +=  Div_a_Grad_perp_curv(Dnn.asField3DParallel() * e_plus_p, logPnlim);
       }
     }
 
@@ -567,6 +562,7 @@ void NeutralMixed::finally(const Options& state) {
     //ef_adv_perp_ylow *= 5/2;
 
     if (neutral_conduction) {
+      
       ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_H3(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
     
       if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
@@ -586,9 +582,9 @@ void NeutralMixed::finally(const Options& state) {
     }
 
     if (include_cond) {
-      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_H3(anomalous_conduction * Nn, Tn, ef_cond_par_ylow, false);
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_H3(anomalous_conduction.asField3DParallel() * Nn, Tn, ef_cond_par_ylow, false);
       bool upwind = false;
-      ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction * Nn, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction.asField3DParallel() * Nn, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
     }
   
     Sp = pressure_source;
@@ -614,7 +610,7 @@ void NeutralMixed::finally(const Options& state) {
     if (!isMMS) {
       ddt(NVn) = -AA * FV::Div_par_fvv_H3(Nnlim, Vn, sound_speed);             // Momentum flow
     } else {
-      ddt(NVn) = -Div_par(NVn * Vn);
+      ddt(NVn) = -FV::Div_par(NVn.asField3DParallel() * Vn);
     }
 
     ddt(NVn) -= Grad_par(Pn);                                 // Pressure gradient
@@ -708,20 +704,6 @@ void NeutralMixed::finally(const Options& state) {
   }
 
 
-
-  if (diagnose) {
-
-    Nh_up = 0.0;
-    Nh_down = 0.0;
-
-    BOUT_FOR(i, Nn.getRegion("RGN_NOY")){
-      const auto iyp = i.yp();
-      const auto iym = i.ym();
-      Nh_up[i] = Nn.yup()[iyp];
-      Nh_down[i] = Nn.ydown()[iym];
-    }
-    
-  }
   
   
   // Scale time derivatives

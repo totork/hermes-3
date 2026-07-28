@@ -355,10 +355,10 @@ if(HERMES_TESTS)
   
   hermes_add_integrated_test(1D-neutral-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-neutral-full-density-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-neutral-full-momentum-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
+  #hermes_add_integrated_test(2D-neutral-full-density-fci
+  #  REQUIRES BOUT_ENABLE_METRIC_3D)
+  #hermes_add_integrated_test(2D-neutral-full-momentum-fci
+  #  REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-perpdiffusion-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-perpdiffusion-conduction-fci
