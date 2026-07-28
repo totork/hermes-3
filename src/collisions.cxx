@@ -196,6 +196,13 @@ void Collisions::transform(Options& state) {
                               * 2 / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
 	  ASSERT2(std::isfinite(Ne[i]));
 	  ASSERT2(std::isfinite(v1sq));
+	  ASSERT2(std::isfinite(coulomb_log));
+	  ASSERT2(std::isfinite(Nelim));
+	  ASSERT2(std::isfinite(logTe));
+	  ASSERT2(std::isfinite(Telim))
+
+
+	  
           ASSERT2(std::isfinite(nu));
           return nu;
         });
