@@ -1,6 +1,7 @@
 *.o
 *.nc
 BOUT.log.*
+run.log.*
 .BOUT.pid.*
 BOUT.settings
 *.a
@@ -10,3 +11,6 @@ BOUT.settings
 .#*
 .ipynb_checkpoints/
 /docs/build/*
+/grids/mms_circle_fci_xz
+*.png
+*README.md
