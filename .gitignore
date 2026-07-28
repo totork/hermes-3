@@ -14,3 +14,4 @@ BOUT.settings
 /grids/mms_circle_fci_xz
 *.png
 *README.md
+/tests/integrated/*/hermes-3
