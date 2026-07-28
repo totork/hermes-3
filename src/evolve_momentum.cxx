@@ -132,10 +132,9 @@ void EvolveMomentum::transform(Options &state) {
   NV.applyParallelBoundary();
 
   
-  V = NV / (AA * Nlim);
+  V = NV.asField3DParallel() / (AA * Nlim.asField3DParallel());
   V.name = Vname;
-  mesh->communicate(V);
-  V.applyParallelBoundary();
+  ASSERT2(V.hasParallelSlices());
   set(species["velocity"], V);
 
   NV_solver = NV; // Save the momentum as calculated by the solver
