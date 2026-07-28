@@ -278,16 +278,17 @@ void EvolvePressure::transform(Options& state) {
   N = getNoBoundary<Field3D>(species["density"]);
 
   Pfloor = floor(P, 0.0);
-  T = Pfloor / floor(N, density_floor);
-  Pfloor = N * T; // Ensure consistency
-
   Pfloor.applyBoundary();
   mesh->communicate(Pfloor);
   Pfloor.applyParallelBoundary();
   
+  T = Pfloor.asField3DParallel() / N;
+  Pfloor = N.asField3DParallel() * T; // Ensure consistency
+
+  ASSERT2(Pfloor.hasParallelSlices());
   set(species["pressure"], Pfloor);
-  mesh->communicate(T);
-  T.applyParallelBoundary("parallel_neumann_o1");
+
+  ASSERT2(T.hasParallelSlices());
   set(species["temperature"], T);
 }
 
