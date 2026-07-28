@@ -27,8 +27,9 @@ protected:
 
 
   Field3D field_avg(const Field3D& f) {
+    return f;
     Field3D result{zeroFrom(f)};
-
+    
     BOUT_FOR(i, f.getRegion("RGN_NOY")) {
 
       const auto ixp = i.xp();

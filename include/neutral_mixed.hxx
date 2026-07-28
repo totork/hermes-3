@@ -63,6 +63,7 @@ private:
   bool LP_limit;
   BoutReal LP_speed;
   Field3D lambdaLP;
+  BoutReal limit_length;
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
   bool inherited_T;
   BoutReal include_cond;

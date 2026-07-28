@@ -107,6 +107,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e13) / Nnorm;
 
+  limit_length = options["limit_length"]
+                 .doc("Grillix style decay length.")
+                 .withDefault(-1.0) / meters;
+  
   dissipative = options["dissipative"]
                  .doc("Use strong dissipation in parallel divergence?")
                  .withDefault(true);
@@ -411,6 +415,9 @@ void NeutralMixed::finally(const Options& state) {
     BoutReal eps = SQ(1. / neutral_lmax);
     Field3D Dmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps));
     BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
+  } else if (limit_length > 0.0) {
+    Field3D denom = 1.0 + (Dnn / (sqrt(Tnlim / AA) * Nnlim * limit_length));
+    Dnn = Dnn / denom;
   }
 
   if (diffusion_limit > 0.0) {
