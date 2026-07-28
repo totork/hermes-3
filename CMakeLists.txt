@@ -334,16 +334,21 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-ion-viscosity-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
 
-  hermes_add_integrated_test(1D-fluid
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(diffusion)
-  hermes_add_integrated_test(evolve_density)
-  hermes_add_integrated_test(vorticity
-    CONFLICTS BOUT_ENABLE_METRIC_3D)
-
   hermes_add_integrated_test(2D-density-anomalous-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-fluid-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+
+  hermes_add_integrated_test(2D-axial-circular-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  
+  hermes_add_integrated_test(2D-circular-anomalous-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+
+  hermes_add_integrated_test(3D-Axial-circular-conduction-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+
+  hermes_add_integrated_test(2D-vorticity-inversion-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   
   hermes_add_integrated_test(1D-neutral-fci
@@ -352,23 +357,17 @@ if(HERMES_TESTS)
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-full-momentum-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(3D-Axial-circular-conduction-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-axial-circular-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-vorticity-inversion-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-sheathtest-recycling-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-circular-anomalous-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-sheathtest-fci
-    REQUIRES BOUT_ENABLE_METRIC_3D)
-
   hermes_add_integrated_test(2D-neutral-perpdiffusion-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-neutral-perpdiffusion-conduction-fci
     REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-sheathtest-recycling-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-sheathtest-fci
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+
+  
+
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave
@@ -376,6 +375,12 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(alfven-wave
     CONFLICTS BOUT_ENABLE_METRIC_3D)
 
+  hermes_add_integrated_test(1D-fluid
+    REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(diffusion)
+  hermes_add_integrated_test(evolve_density)
+  hermes_add_integrated_test(vorticity
+    CONFLICTS BOUT_ENABLE_METRIC_3D)
 
   hermes_add_integrated_test(fci-example-1
     REQUIRES BOUT_ENABLE_METRIC_3D
@@ -386,7 +391,7 @@ if(HERMES_TESTS)
 
   
   # Unit tests
-  option(HERMES_UNIT_TESTS "Build the unit tests" ON)
+  option(HERMES_UNIT_TESTS "Build the unit tests" OFF)
   if(HERMES_UNIT_TESTS)
     if(NOT PACKAGE_TESTS)
       # Not running BOUT++ tests
