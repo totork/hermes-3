@@ -107,16 +107,16 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                       "Normalised units.")
                  .withDefault(1e13) / Nnorm;
 
-  diffusion_limit = options["diffusion_limit"]
-                 .doc("Set any diffusion coefficient to set to this maximum.")
-                 .withDefault(-1.0) / (meters * meters / seconds);
-  
   dissipative = options["dissipative"]
                  .doc("Use strong dissipation in parallel divergence?")
                  .withDefault(true);
   
   use_finite_difference = options["use_finite_difference"]
                    .doc("Use finite difference for perpendicular diffusion?")
+                   .withDefault<bool>(false);
+
+  disable_Dnn = options["disable_Dnn"]
+                   .doc("Set Dnn to 0? Useful for MMS tests")
                    .withDefault<bool>(false);
 
   disable_ddt = options["disable_ddt"]
@@ -127,7 +127,6 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Use parallel dirichlet boundary conditions for the plasma?")
                    .withDefault<bool>(true);
 
-  
   n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
@@ -162,11 +161,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
           .withDefault(-1.0);
 
-  limit_length = options["limit_length"]
-                          .doc("Use the gradient length decay for the flux limiter?")
-                          .withDefault<BoutReal>(-1.0) / meters;
+  diffusion_limit = options["diffusion_limit"]
+                        .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
+                        .withDefault(-1.0)
+                    / (meters * meters / seconds); // Normalise
 
-  
   neutral_viscosity = options["neutral_viscosity"]
                           .doc("Include neutral gas viscosity?")
                           .withDefault<bool>(false);
@@ -376,8 +375,7 @@ void NeutralMixed::finally(const Options& state) {
   Field3D Rnn =
     sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
-  
-  if (localstate.isSet("collision_frequency") && (flux_limit > 0.0 || limit_length > 0.0)) {
+  if (localstate.isSet("collision_frequency") && flux_limit > 0.0) {
     Dnn = (Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]));
   } else if (localstate.isSet("collision_frequency")) {
     // Dnn = Vth^2 / sigma
@@ -405,64 +403,33 @@ void NeutralMixed::finally(const Options& state) {
     // Flux-limited diffusion
     Dnn = 3.0 * lambdaLP * Dclassical;
   }
- 
-  kappa_n = (5. / 2) * Dnn * Nn;
 
-  eta_n = AA * (2. / 5) * kappa_n;
-
-  
-  if (limit_length > 0.0) {
-
-    Field3D denom = 1.0 + (Dnn / (sqrt(Tnlim / AA) * Nnlim * limit_length));
-    Dnn = Dnn / denom;
-    kappa_n = kappa_n / denom;
-    eta_n = eta_n / denom;
-  } else if (flux_limit > 0.0) {
+  if (flux_limit > 0.0) {
     // Apply flux limit to diffusion,
     // using the local thermal speed and pressure gradient magnitude
     // Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
     BoutReal eps = SQ(1. / neutral_lmax);
     Field3D Dmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps));
-    Field3D kappa_nmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(Tn)) + SQ(Grad_z(Tn)) + eps));
-    Field3D eta_nmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(Vn)) + SQ(Grad_z(Vn)) + eps));
-    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
-      kappa_n[i] = kappa_n[i] * kappa_nmax[i] / (kappa_n[i] + kappa_nmax[i]);
-      eta_n[i] = eta_n[i] * eta_nmax[i] / (eta_n[i] + eta_nmax[i]);
-    }
+    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
   }
 
+  if (diffusion_limit > 0.0) {
+    // Impose an upper limit on the diffusion coefficient
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+    }
+  }
   
+  if (disable_Dnn) {
+    Dnn = 0.0;
+  }
   
   Dnn.applyBoundary("neumann");
   mesh->communicate(Dnn);
-  Dnn.applyParallelBoundary("parallel_neumann_o1");  
+  Dnn.applyParallelBoundary("parallel_neumann_o1");
+  
   Dnn = floor(Dnn, 1e-10);
-
-  kappa_n.applyBoundary("neumann");
-  mesh->communicate(kappa_n);
-  kappa_n.applyParallelBoundary("parallel_neumann_o1");
-  kappa_n = floor(kappa_n, 1e-10);
-
-  eta_n.applyBoundary("neumann");
-  mesh->communicate(eta_n);
-  eta_n.applyParallelBoundary("parallel_neumann_o1");
-  eta_n = floor(eta_n, 1e-10);
   
-
-  
-  if (diffusion_limit > 0.0) {
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
-      kappa_n[i] = kappa_n[i] * diffusion_limit / (kappa_n[i] + diffusion_limit);      
-      eta_n[i] = eta_n[i] * diffusion_limit / (eta_n[i] + diffusion_limit);
-    }
-  }
-
-
-
-
-
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
@@ -497,12 +464,20 @@ void NeutralMixed::finally(const Options& state) {
   }
 
 
+  // Heat conductivity 
+  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
+  //       where nu is the collision frequency used in Dnn
+  kappa_n = (5. / 2) * DnnNn;
 
+  // Viscosity
+  // Relationship between heat conduction and viscosity for neutral
+  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+  // Transport Processes in Gases", 1972
+  // eta_n = (2. / 5) * m_n * kappa_n;
+  //
+  eta_n = AA * (2. / 5) * kappa_n;
 
-
-
-
-  
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
