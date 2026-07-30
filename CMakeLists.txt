@@ -454,7 +454,9 @@ if(HERMES_TESTS)
   hermes_add_fci_test(1D-momentum-fci)
   hermes_add_fci_test(1D-pressure-fci)
 
-  
+  hermes_add_fci_test(1D-ionviscosity-fci)
+  hermes_add_fci_test(1D-electronviscosity-fci)
+
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
