@@ -146,9 +146,10 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   GuardedOptions allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const auto Bxy = coord->Bxy;
-  Field3D sqrtB = sqrt(Bxy);
-  Field3D logB = log(Bxy);
+  const Coordinates::FieldMetric Bxy = coord->Bxy;
+  Coordinates::FieldMetric sqrtB = sqrt(Bxy);
+  Coordinates::FieldMetric logB = log(Bxy);
+  
   if (mesh->isFci()) {
     mesh->communicate(sqrtB, logB); // Communicate because sqrt and log are broken right now for the F3DPs. 
   }
