@@ -56,8 +56,9 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
 
+#if BOUT_USE_METRIC_3D
   dagp_op = FCI::getDagp_fv(mesh, rho_s0);
-
+#endif 
   
   substitutePermissions("name", {name});
   substitutePermissions("optional", {"temperature", "velocity"});
