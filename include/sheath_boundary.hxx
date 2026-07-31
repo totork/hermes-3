@@ -6,7 +6,7 @@
 
 #include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>
-
+#include <bout/yboundary_regions.hxx>
 #include <string>
 
 /// Boundary condition at the wall in Y
@@ -67,6 +67,8 @@ private:
   BoutReal ion_ee_E_max;     ///< Peak energy [normalised]
   BoutReal ion_ee_p;         ///< Shape coefficient
 
+  YBoundary yboundary;
+  
   ///
   /// # Inputs
   /// - species
