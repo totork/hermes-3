@@ -2,7 +2,10 @@
 
 #include "../include/div_ops.hxx"
 
+#include <bout/fv_ops_impl.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/difops.hxx>
+
 #include <bout/mesh.hxx>
 #include <bout/options.hxx>
 #include <bout/output_bout_types.hxx>
@@ -31,6 +34,20 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
                     .doc("Anomalous particle diffusion coefficient [m^2/s]")
                     .withDefault(anomalous_D)
                 / diffusion_norm;
+
+  anomalous_D_par = 0.0;
+  include_D_par = (mesh->get(anomalous_D_par, std::string("D_") + name) == 0)
+              || options.isSet("anomalous_D_par");
+  // Option overrides mesh value 
+  anomalous_D_par = options["anomalous_D_par"]
+                    .doc("Anomalous parallel particle diffusion coefficient [m^2/s]")
+                    .withDefault(anomalous_D_par)
+                / diffusion_norm;
+
+  if (mesh->isFci()) {
+    mesh->communicate(anomalous_D_par);
+    anomalous_D_par.applyParallelBoundary("parallel_neumann_o1");
+  }
 
   anomalous_chi = 0.0;
   include_chi = (mesh->get(anomalous_chi, std::string("chi_") + name) == 0)
@@ -63,7 +80,7 @@ AnomalousDiffusion3D::AnomalousDiffusion3D(std::string name, Options& alloptions
   substitutePermissions("name", {name});
   substitutePermissions("optional", {"temperature", "velocity"});
   std::vector<std::string> output_vars;
-  if (include_D) {
+  if (include_D || include_D_par) {
     output_vars.push_back("density_source");
     output_vars.push_back("particle_flow_xlow");
     output_vars.push_back("particle_flow_ylow");
@@ -129,6 +146,11 @@ void AnomalousDiffusion3D::transform_impl(GuardedOptions& state) {
 		flow_xlow, flow_ylow, false));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
+  }
+
+  if (include_D_par) {
+    Field3D dummy;
+    add(species["density_source"], Div_par_K_Grad_par_mod(anomalous_D_par, N, dummy, false));
   }
 
   if (include_chi) {

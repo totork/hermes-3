@@ -4,6 +4,8 @@
 
 #include "component.hxx"
 #include "../include/div_ops.hxx"
+#include <bout/fv_ops_impl.hxx>
+
 
 /// Add anomalous diffusion of density, momentum and energy
 ///
@@ -33,11 +35,11 @@ private:
   std::string name; ///< Species name
 
   bool diagnose;                           ///< Outputting diagnostics?
-  bool include_D, include_chi, include_nu; ///< Which terms should be included?
+  bool include_D, include_D_par, include_chi, include_nu; ///< Which terms should be included?
   Field3D anomalous_D;                     ///< Anomalous density diffusion coefficient
   Field3D anomalous_chi;                   ///< Anomalous thermal diffusion coefficient
   Field3D anomalous_nu;                    ///< Anomalous momentum diffusion coefficient
-
+  Field3D anomalous_D_par;                 ///< Anomalous parallel density diffusion coefficient
   std::shared_ptr<FCI::dagp_fv> dagp_op;
   
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
