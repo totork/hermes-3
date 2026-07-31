@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+from __future__ import division
+from __future__ import print_function
+
+try:
+    from builtins import str
+except:
+    pass
+
+from boututils.run_wrapper import shell, launch_safe, getmpirun
+from boutdata.collect import collect
+
+from numpy import sqrt, max, abs, mean, array, log, concatenate
+
+import tarfile
+
+gridpath = "../../../../grids/slab_with_BC/"
+
+
+def gridname():
+    return gridpath + f"MMS_straight_slab_6_128_4_True.fci.grid.nc"
+
+
+nout = 20
+timestep = 1e4 / nout
+
+nproc = 1
+
+
+args = (
+    "mesh:file="
+    + gridname()
+    + " nout="
+    + str(nout)
+    + " timestep="
+    + str(timestep)
+)
+
+print("Running with " + args)
+
+# Delete old data
+shell("rm data/BOUT.dmp.*.nc")
+
+# Command to run
+cmd = "../../../hermes-3 " + args
+# Launch using MPI
+s, out = launch_safe(cmd, nproc=nproc, pipe=True)
+
+# Save output to log file
+f = open("run.log." + str(ny), "w")
+f.write(out)
+f.close()
+
+
+success = True
+
+if success:
+    print(" => Test passed")
+    exit(0)
+else:
+    print(" => Test failed")
+    exit(1)

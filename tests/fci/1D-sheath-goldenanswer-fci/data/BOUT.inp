@@ -1,0 +1,90 @@
+# 1D system with:
+#  - no-flow boundary on lower Y
+#  - sheath boundary on upper Y
+#  - Evolving electron and ion species
+#  - heat conduction
+#  - Uniform source of heat and particles throughout domain
+#  - Non-uniform grid, packed towards the target
+#  - Recycling of ions as atoms
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Feedback control of upstream density
+#
+#  Does not include recombination
+
+
+nout = 10
+timestep = 5000
+
+
+[mesh:paralleltransform]
+type = fci
+
+
+[hermes]
+# Evolve ion density, ion and electron pressure, then calculate force on ions due
+# to electron pressure by using electron force balance.
+components = (d+, e,
+              sheath_boundary, braginskii_collisions, 
+              braginskii_heat_exchange, braginskii_conduction)
+
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 100
+
+[solver]
+type = cvode  # Backward Euler steady-state solver
+
+mxstep = 50000
+
+atol = 1e-7
+rtol = 1e-5
+
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_pressure, evolve_momentum)
+
+charge = 1
+AA = 2
+
+
+thermal_conduction = true  # in evolve_pressure
+
+
+[Nd+]
+
+function = 1
+
+flux = 1e21
+adapt_source = 2e19
+source = flux * gauss(y - pi, 0.25)
+
+
+[Pd+]
+
+function = (10.0 / `hermes`:Tnorm) * `Nd+`:function
+
+
+heating = 1e4
+T_source = heating / (`Nd+`:flux * 1.602e-19 * 1.5)
+source =  `Nd+`:source * T_source * 1.602176634e-19
+
+[NVd+]
+
+function = 0
+
+
+[e] # Electrons
+type = quasineutral, evolve_pressure, zero_current
+
+charge = -1
+AA = 1/1836
+
+thermal_conduction = true  # in evolve_pressure
+
+[Pe]
+
+function = `Pd+:function`  # Same as ion pressure initially
+
+source = `Pd+:source`  # Same as ion pressure source
+
