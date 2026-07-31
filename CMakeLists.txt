@@ -95,6 +95,7 @@ set(HERMES_SOURCES
     src/sound_speed.cxx
     src/zero_current.cxx
     src/anomalous_diffusion.cxx
+    src/anomalous_diffusion_3d.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
     src/adas_reaction.cxx
@@ -120,6 +121,7 @@ set(HERMES_SOURCES
     include/adas_neon.hxx
     include/amjuel_data.hxx
     include/anomalous_diffusion.hxx
+    include/anomalous_diffusion_3d.hxx
     include/classical_diffusion.hxx
     include/cx_reaction.hxx
     include/binormal_stpm.hxx
@@ -453,8 +455,14 @@ if(HERMES_TESTS)
   hermes_add_fci_test(1D-density-fci)
   hermes_add_fci_test(1D-momentum-fci)
   hermes_add_fci_test(1D-pressure-fci)
+  hermes_add_fci_test(1D-conduction-fci)
 
-  
+  hermes_add_fci_test(1D-ionviscosity-fci)
+  hermes_add_fci_test(1D-electronviscosity-fci)
+
+
+  hermes_add_fci_test(2D-density-anomalous-fci)
+
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
