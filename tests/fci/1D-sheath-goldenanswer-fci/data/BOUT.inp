@@ -13,9 +13,13 @@
 #  Does not include recombination
 
 
-nout = 10
-timestep = 5000
+nout = 100
+timestep = 1e6 / nout
 
+
+[mesh]
+
+file = "../../../../../grids/slab_with_BC/MMS_straight_slab_8_128_4_True.fci.grid.nc"
 
 [mesh:paralleltransform]
 type = fci
@@ -25,15 +29,15 @@ type = fci
 # Evolve ion density, ion and electron pressure, then calculate force on ions due
 # to electron pressure by using electron force balance.
 components = (d+, e,
-              sheath_boundary, braginskii_collisions, 
-              braginskii_heat_exchange, braginskii_conduction)
+              sheath_boundary_fci, braginskii_collisions, 
+              braginskii_ion_viscosity, braginskii_conduction, braginskii_heat_exchange)
 
 Nnorm = 1e19
 Bnorm = 1
 Tnorm = 100
 
 [solver]
-type = cvode  # Backward Euler steady-state solver
+type = pvode  # Backward Euler steady-state solver
 
 mxstep = 50000
 
@@ -41,13 +45,15 @@ atol = 1e-7
 rtol = 1e-5
 
 
+
 [d+]  # Deuterium ions
-type = (evolve_density, evolve_pressure, evolve_momentum)
+type = (evolve_density, evolve_pressure, evolve_momentum, anomalous_diffusion_3d)
 
 charge = 1
 AA = 2
 
-
+anomalous_D_par = 1e4
+conduction_collisions_mode = braginskii
 thermal_conduction = true  # in evolve_pressure
 
 
@@ -55,17 +61,17 @@ thermal_conduction = true  # in evolve_pressure
 
 function = 1
 
-flux = 1e21
-adapt_source = 2e19
+flux = 4e22
+
 source = flux * gauss(y - pi, 0.25)
 
 
 [Pd+]
 
-function = (10.0 / `hermes`:Tnorm) * `Nd+`:function
+function = (70.0 / `hermes`:Tnorm) * `Nd+`:function
 
 
-heating = 1e4
+heating = 8e5
 T_source = heating / (`Nd+`:flux * 1.602e-19 * 1.5)
 source =  `Nd+`:source * T_source * 1.602176634e-19
 
@@ -81,7 +87,7 @@ charge = -1
 AA = 1/1836
 
 thermal_conduction = true  # in evolve_pressure
-
+conduction_collisions_mode = braginskii
 [Pe]
 
 function = `Pd+:function`  # Same as ion pressure initially

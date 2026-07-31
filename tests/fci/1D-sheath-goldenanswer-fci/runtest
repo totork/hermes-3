@@ -21,10 +21,10 @@ gridpath = "../../../../grids/slab_with_BC/"
 
 
 def gridname():
-    return gridpath + f"MMS_straight_slab_6_128_4_True.fci.grid.nc"
+    return gridpath + f"MMS_straight_slab_8_128_4_True.fci.grid.nc"
 
 
-nout = 20
+nout = 10
 timestep = 1e4 / nout
 
 nproc = 1
@@ -48,11 +48,6 @@ shell("rm data/BOUT.dmp.*.nc")
 cmd = "../../../hermes-3 " + args
 # Launch using MPI
 s, out = launch_safe(cmd, nproc=nproc, pipe=True)
-
-# Save output to log file
-f = open("run.log." + str(ny), "w")
-f.write(out)
-f.close()
 
 
 success = True

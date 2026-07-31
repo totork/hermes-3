@@ -88,6 +88,7 @@ set(HERMES_SOURCES
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
+    src/sheath_boundary_fci.cxx
     src/sheath_boundary_simple.cxx
     src/sheath_boundary_insulating.cxx
     src/snb_conduction.cxx
@@ -168,6 +169,7 @@ set(HERMES_SOURCES
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
+    include/sheath_boundary_fci.hxx	
     include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
     include/simple_conduction.hxx
@@ -459,7 +461,7 @@ if(HERMES_TESTS)
 
   hermes_add_fci_test(1D-ionviscosity-fci)
   hermes_add_fci_test(1D-electronviscosity-fci)
-
+  hermes_add_fci_test(1D-sheath-goldenanswer-fci)
 
   hermes_add_fci_test(2D-density-anomalous-fci)
 

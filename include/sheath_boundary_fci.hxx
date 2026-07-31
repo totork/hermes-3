@@ -1,0 +1,129 @@
+#pragma once
+#ifndef SHEATH_BOUNDARY_FCI_H
+#define SHEATH_BOUNDARY_FCI_H
+
+#include "component.hxx"
+
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/yboundary_regions.hxx>
+#include <string>
+
+/// Boundary condition at the wall in Y
+///
+/// This is a collective component, because it couples all charged species
+///
+/// These are based on
+/// "Boundary conditions for the multi-ion magnetized plasma-wall transition"
+///  by D.Tskhakaya, S.Kuhn. JNM 337-339 (2005), 405-409
+///
+/// Notes:
+///   - The approximation used here is for ions having similar
+///     gyro-orbit sizes
+///   - No boundary condition is applied to neutral species
+///   - Boundary conditions are applied to field-aligned fields
+///     using to/fromFieldAligned
+///
+struct SheathBoundaryFci : public NamedComponent<SheathBoundaryFci> {
+  /// # Input options
+  /// - <name>  e.g. "sheath_boundary"
+  ///   - lower_y                  Boundary on lower y?
+  ///   - upper_y                  Boundary on upper y?
+  ///   - wall_potential           Voltage of the wall [Volts]
+  ///   - floor_potential          Apply floor to sheath potential?
+  ///   - secondary_electron_coef  Effective secondary electron emission coefficient
+  ///   - sin_alpha                Sine of the angle between magnetic field line and wall
+  ///   surface (0 to 1)
+  ///   - always_set_phi           Always set phi field? Default is to only modify if
+  ///   already set
+  SheathBoundaryFci(std::string name, Options& options, Solver*);
+
+  /// Ion-induced secondary electron emission yield γ(E_i)
+  ///
+  /// Input energy `ion_energy` is in Hermes normalised units (same as used internally
+  /// in `src/sheath_boundary.cxx`).
+  ///
+  /// If ion-induced SEE is disabled (`ion_ee_gamma_max < 0`) then returns 0.
+  BoutReal ionSecondaryElectronEmissionGamma(BoutReal ion_energy) const;
+
+  static constexpr auto type = "sheath_boundary_fci";
+
+private:
+  BoutReal Ge;       // Secondary electron emission coefficient
+  Field3D sin_alpha; // sin of angle between magnetic field and wall.
+
+  bool lower_y; // Boundary on lower y?
+  bool upper_y; // Boundary on upper y?
+
+  bool always_set_phi; ///< Set phi field?
+
+  Field3D wall_potential; ///< Voltage at the wall. Normalised units.
+
+  bool floor_potential; ///< Apply floor to sheath potential?
+
+  // Ion-induced Secondary Electron Emission
+  BoutReal ion_ee_gamma_max; ///< Maximum ion induced secondary emission coefficient
+  BoutReal ion_ee_E_th;      ///< Threshold energy [normalised]
+  BoutReal ion_ee_E_max;     ///< Peak energy [normalised]
+  BoutReal ion_ee_p;         ///< Shape coefficient
+  bool diagnose;
+  YBoundary yboundary;
+
+  Field3D electron_energy_source;
+  
+  ///
+  /// # Inputs
+  /// - species
+  ///   - e
+  ///     - density
+  ///     - temperature
+  ///     - pressure    Optional
+  ///     - velocity    Optional
+  ///     - AA          Optional
+  ///     - adiabatic   Optional. Ratio of specific heats, default 5/3.
+  ///   - <ions>  if charge is set (i.e. not neutrals)
+  ///     - charge
+  ///     - AA
+  ///     - density
+  ///     - temperature
+  ///     - pressure     Optional
+  ///     - velocity     Optional. Default 0
+  ///     - momentum     Optional. Default mass * density * velocity
+  ///     - adiabatic    Optional. Ratio of specific heats, default 5/3.
+  /// - fields
+  ///   - phi    Optional. If not set, calculated at boundary (see note below)
+  ///
+  /// # Outputs
+  /// - species
+  ///   - e
+  ///     - density      Sets boundary
+  ///     - temperature  Sets boundary
+  ///     - pressure     Sets boundary
+  ///     - velocity     Sets boundary
+  ///     - energy_source
+  ///   - <ions>
+  ///     - density      Sets boundary
+  ///     - temperature  Sets boundary
+  ///     - pressure     Sets boundary
+  ///     - velocity     Sets boundary
+  ///     - momentum     Sets boundary
+  ///     - energy_source
+  /// - fields
+  ///   - phi   Sets boundary
+  ///
+  /// If the field phi is set, then this is used in the boundary condition.
+  /// If not set, phi at the boundary is calculated and stored in the state.
+  /// Note that phi in the domain will not be set, so will be invalid data.
+  ///
+  ///
+  void transform_impl(GuardedOptions& state) override;
+
+  void outputVars(Options& state) override;
+  
+};
+
+namespace {
+RegisterComponent<SheathBoundaryFci> registercomponentsheathboundaryfci;
+}
+
+#endif // SHEATH_BOUNDARY_FCI_H
