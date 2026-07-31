@@ -6,6 +6,8 @@
 
 #include "../include/zero_current.hxx"
 
+using bout::globals::mesh;
+
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name,
                      {readIfSet("species:{all_species}:charge"),
@@ -49,9 +51,9 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
       if (!current.isAllocated()) {
         // Not yet allocated -> Set to the value
         // This avoids having to set to zero initially and add the first time
-        current = charge * N * V;
+        current = charge * N.asField3DParallel() * V.asField3DParallel();
       } else {
-        current += charge * N * V;
+        current += charge * N.asField3DParallel() * V.asField3DParallel();
       }
     }
   }
@@ -69,7 +71,10 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * floor(N, 1e-5));
+  velocity = current.asField3DParallel() / (-charge * floor(N.asField3DParallel(), 1e-5));
+  if (mesh->isFci()) {
+    ASSERT2(velocity.hasParallelSlices());
+  }
   set(species["velocity"], velocity);
 }
 
