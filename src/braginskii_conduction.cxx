@@ -273,18 +273,25 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       mesh->communicate(kappa_par);
     }
 
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
-        auto im = i.ym();
-        kappa_par[im] = kappa_par[i];
+    if (P.isFci()) {
+      mesh->communicate(kappa_par);
+      kappa_par.applyParallelBoundary("parallel_neumann_o2");
+      
+    } else {
+
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+	for (int jz = 0; jz < mesh->LocalNz; jz++) {
+	  auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
+	  auto im = i.ym();
+	  kappa_par[im] = kappa_par[i];
+	}
       }
-    }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->yend, jz);
-        auto ip = i.yp();
-        kappa_par[ip] = kappa_par[i];
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+	for (int jz = 0; jz < mesh->LocalNz; jz++) {
+	  auto i = indexAt(kappa_par, r.ind, mesh->yend, jz);
+	  auto ip = i.yp();
+	  kappa_par[ip] = kappa_par[i];
+	}
       }
     }
 
