@@ -455,6 +455,10 @@ if(HERMES_TESTS)
   hermes_add_fci_test(1D-density-fci)
   hermes_add_fci_test(1D-momentum-fci)
   hermes_add_fci_test(1D-pressure-fci)
+  hermes_add_fci_test(1D-conduction-fci)
+
+  hermes_add_fci_test(1D-ionviscosity-fci)
+  hermes_add_fci_test(1D-electronviscosity-fci)
 
 
   hermes_add_fci_test(2D-density-anomalous-fci)
