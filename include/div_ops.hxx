@@ -81,6 +81,10 @@ Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
 Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                                      Field3D& flux_xlow, Field3D& flux_ylow);
 
+const Field3D Div_par_fv(const Field3D& f_in, const Field3D& v_in, const Field3D& wave_speed_in);
+
+const Field3D Div_par_fvv_fv(const Field3D& f, const Field3D& v, const Field3D& fastest);
+
 /*!
  * Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) -- Vorticity
  *

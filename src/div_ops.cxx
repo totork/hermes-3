@@ -1996,3 +1996,88 @@ inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& 
   return -(fac_ZX[i] * dx + fac_ZZ[i] * dz) * av;
 }
 } // namespace FCI
+
+
+
+
+// FCI specidic operators that have to be pushed to BOUT++ at some point
+
+const Field3D Div_par_fv(const Field3D& f_in, const Field3D& v_in, const Field3D& wave_speed_in){
+  Coordinates* coord = f_in.getCoordinates();
+  ASSERT1(f_in.hasParallelSlices());
+  ASSERT1(v_in.hasParallelSlices());
+  const auto& f_up = f_in.yup();
+  const auto& f_down = f_in.ydown();
+
+  const auto& v_up = v_in.yup();
+  const auto& v_down = v_in.ydown();
+
+  Field3D result{emptyFrom(f_in)};
+
+  BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
+    const auto iyp = i.yp();
+    const auto iym = i.ym();
+    
+    // Maximum local wave speed
+
+    const BoutReal amax = wave_speed_in[i];
+    BoutReal flux_up = 0.0;
+    BoutReal flux_down = 0.0;
+
+    flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cell_area_yhigh()[i];
+
+    flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cell_area_ylow()[i];
+
+    result[i] = (flux_up - flux_down) / (coord->cell_volume()[i]);
+  }
+
+  return result;
+  
+}
+
+
+const Field3D Div_par_fvv_fv(const Field3D& f, const Field3D& v, const Field3D& fastest){
+  Coordinates* coord = f.getCoordinates();
+
+  ASSERT1(f.hasParallelSlices());
+  ASSERT1(v.hasParallelSlices());
+
+  const auto& f_up = f.yup();
+  const auto& f_down = f.ydown();
+
+  const auto& v_up = v.yup();
+  const auto& v_down = v.ydown();
+
+  const auto& cellvolume = coord->cell_volume();
+  const auto& cellarea_yup = coord->cell_area_yhigh();
+  const auto& cellarea_ydown = coord->cell_area_ylow();
+
+
+
+  Field3D result{emptyFrom(f)};
+
+  BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
+    const auto iyp = i.yp();
+    const auto iym = i.ym();
+
+    const BoutReal amax = fabs(fastest[i]);
+
+    BoutReal fmid_up = 0.5 * (f[i] + f_up[iyp]);
+    BoutReal vmid_up = 0.5 * (v[i] + v_up[iyp]);
+    BoutReal midflux_up = fmid_up * vmid_up * vmid_up;
+    BoutReal penflux_up = amax * fmid_up * (v[i] - v_up[iyp]);
+    BoutReal flux_up = (midflux_up + penflux_up) * cellarea_yup[i];
+
+    BoutReal fmid_down = 0.5 * (f[i] + f_down[iym]);
+    BoutReal vmid_down = 0.5 * (v[i] + v_down[iym]);
+
+    BoutReal midflux_down = fmid_down * vmid_down * vmid_down;
+    BoutReal penflux_down = -amax * fmid_down * (v[i] - v_down[iym]);
+    BoutReal flux_down = (midflux_down + penflux_down) * cellarea_ydown[i];    
+
+
+    result[i] = (flux_up - flux_down) / cellvolume[i];
+    
+  }
+  return result;
+}

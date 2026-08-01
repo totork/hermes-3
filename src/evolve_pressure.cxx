@@ -34,7 +34,7 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       name(name) {
 
   auto& options = alloptions[name];
-
+  isMMS = Options::root()["solver"]["mms"].withDefault<bool>(false);
   evolve_log = options["evolve_log"]
                    .doc("Evolve the logarithm of pressure?")
                    .withDefault<bool>(false);
@@ -303,7 +303,14 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      if (mesh->isFci() && isMMS) {
+	ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      } else if (mesh->isFci()) {
+	ddt(P) -= Div_par_fv(P, V, fastest_wave);
+      } else {
+	ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      }
+      
 
       // Work done. This balances energetically a term in the momentum equation
       if (P.isFci()) {
@@ -318,9 +325,15 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -=
-          (5. / 3)
-          * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+
+      if (mesh->isFci() && isMMS) {
+	ddt(P) -= (5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      }	else if	(mesh->isFci()) {
+	ddt(P) -= (5.0 / 3.0) * Div_par_fv(P, V, fastest_wave);
+      }	else {
+	ddt(P) -= (5.0 / 3.0) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      }
+      
       if (P.isFci()) {
 	E_VgradP = V * Grad_par(P.asField3DParallel());
       } else {
@@ -328,9 +341,11 @@ void EvolvePressure::finally(const Options& state) {
       }
       ddt(P) += (2. / 3) * E_VgradP;
     }
-    flow_ylow_advection *= 5. / 2; // Energy flow
-    flow_ylow = flow_ylow_advection;
-
+    if (flow_ylow_advection.isAllocated()) {
+      flow_ylow_advection *= 5. / 2; // Energy flow                                                                                                                                                                                                                             
+      flow_ylow = flow_ylow_advection;
+    }
+    
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);

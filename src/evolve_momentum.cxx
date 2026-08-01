@@ -35,7 +35,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   solver->add(NV, std::string("NV") + name);
 
   auto& options = alloptions[name];
-
+  isMMS = Options::root()["solver"]["mms"].withDefault<bool>(false);
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   const BoutReal temperature_floor =
@@ -204,8 +204,10 @@ void EvolveMomentum::finally(const Options& state) {
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
 
-  if (NV.isFci()) {
+  if (NV.isFci() && isMMS) {
     ddt(NV) -= Div_par(NV.asField3DParallel() * V);
+  } else if (mesh->isFci()) {
+    ddt(NV) -= Div_par_fvv_fv(Nlim, V, fastest_wave);
   } else {
     ddt(NV) -= AA
       * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,

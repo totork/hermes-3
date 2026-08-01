@@ -44,7 +44,7 @@ private:
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal pressure_floor;
   bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
-
+  bool isMMS;
   BoutReal hyper_z; ///< Hyper-diffusion
 
   bool diagnose;                   ///< Output additional diagnostics?

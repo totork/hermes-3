@@ -32,7 +32,7 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     : NamedComponent(name, {readWrite("species:{name}:{outputs}")}), name(name) {
 
   auto& options = alloptions[name];
-
+  isMMS = Options::root()["solver"]["mms"].withDefault<bool>(false);
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
                    .withDefault<bool>(true);
@@ -283,7 +283,15 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
+
+    if (mesh->isFci() && isMMS) {
+      ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
+    } else  if (mesh->isFci()) {
+      ddt(N) -= Div_par_fv(N, V, fastest_wave);
+    } else {
+      ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
+    }
+    
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term

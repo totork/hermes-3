@@ -87,7 +87,7 @@ private:
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;                   ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
-
+  bool isMMS;
   BoutReal hyper_z;   ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T
 
