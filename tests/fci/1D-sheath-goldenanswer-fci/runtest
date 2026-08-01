@@ -25,7 +25,7 @@ def gridname():
 
 
 nout = 10
-timestep = 1e3 / nout
+timestep = 1e2 / nout
 
 nproc = 1
 
