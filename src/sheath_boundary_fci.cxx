@@ -25,11 +25,6 @@ using bout::globals::mesh;
 
 namespace {
 
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  const int ny = f.getNy();
-  const int nz = f.getNz();
-  return Ind3D{(((x * ny) + y) * nz) + z, ny, nz};
-}
 
 /// Limited free gradient of log of a quantity
 /// This ensures that the guard cell values remain positive
@@ -324,8 +319,7 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 	
 
       yboundary.iter([&](auto& pnt) {	
-	const auto& i = pnt.ind();
-
+	
 	BoutReal s_i =
 	  std::clamp(0.5 * (3. * pnt.current(Ni) / pnt.current(Ne) - pnt.prev(Ni) / pnt.prev(Ne)), 0.0, 1.0);
 
