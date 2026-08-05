@@ -29,8 +29,19 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_ALL")
   checkData(var);
   T result{emptyFrom(var)};
   result.allocate();
+  
+  BOUT_FOR(d, var.getRegion(rgn)) {
+    result[d] = softFloor(var[d], f);
+  }
 
-  BOUT_FOR(d, var.getRegion(rgn)) { result[d] = softFloor(var[d], f); }
+  if (var.hasParallelSlices()) {
+    BOUT_FOR(d, var.getRegion("RGN_NOY")) {
+      const auto iyp = d.yp();
+      const auto iym = d.ym();
+      result.yup()[iyp] = softFloor(var.yup()[iyp], f);
+      result.ydown()[iym] = softFloor(var.ydown()[iym], f);
+    }
+  }
 
   return result;
 }

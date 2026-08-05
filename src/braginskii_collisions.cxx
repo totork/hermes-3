@@ -183,7 +183,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
         const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
           const BoutReal Telim = softFloor(Te[i], 0.1);
-          const BoutReal Nelim = softFloor(Ne[i], 1e10);
+	  const BoutReal Nelim = softFloor(Ne[i], 1e10);
           const BoutReal logTe = log(Telim);
           // From NRL formulary 2019, page 34
           // Coefficient 30.4 from converting cm^-3 to m^-3
@@ -197,6 +197,10 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           const BoutReal nu = SQ(SQ(SI::qe)) * floor(Ne[i], 0.0)
                               * softFloor(coulomb_log, 1.0) * 2
                               / (3 * pow(PI * 2 * v1sq, 1.5) * SQ(SI::e0 * SI::Me));
+	  ASSERT2(std::isfinite(Telim));
+          ASSERT2(std::isfinite(Nelim));
+          ASSERT2(std::isfinite(logTe));
+          ASSERT2(std::isfinite(coulomb_log));
 
           ASSERT2(std::isfinite(nu));
           return nu;

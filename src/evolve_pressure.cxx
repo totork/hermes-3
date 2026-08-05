@@ -242,12 +242,12 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   if (P.isFci()) {
 
     Pfloor = floor(P.asField3DParallel(), 0.0);
-    T =	Pfloor.asField3DParallel() / floor(N.asField3DParallel(), density_floor);
+    T =	Pfloor.asField3DParallel() / softFloor(N.asField3DParallel(), density_floor);
     Pfloor = N.asField3DParallel() * T;
 
     ASSERT2(Pfloor.hasParallelSlices());
     ASSERT2(T.hasParallelSlices());
-    
+    checkData(T);
   } else {
     
     Pfloor = floor(P, 0.0);

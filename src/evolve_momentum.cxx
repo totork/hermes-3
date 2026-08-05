@@ -94,8 +94,8 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
   auto N = getNoBoundary<Field3D>(species["density"]);
 
   const Field3D Nlim = NV.isFci()?
-    floor(N.asField3DParallel(), density_floor)
-    :softFloor(N.asField3DParallel(), density_floor);
+    softFloor(N.asField3DParallel(), density_floor)
+    :softFloor(N, density_floor);
   
   const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
@@ -132,8 +132,8 @@ void EvolveMomentum::finally(const Options& state) {
   const Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
   const Field3D Nlim = NV.isFci()?
-    floor(N.asField3DParallel(), density_floor)
-    :softFloor(N.asField3DParallel(), density_floor);
+    softFloor(N.asField3DParallel(), density_floor)
+    :softFloor(N, density_floor);
   
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
