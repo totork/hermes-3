@@ -149,9 +149,11 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   const Coordinates::FieldMetric Bxy = coord->Bxy;
   Coordinates::FieldMetric sqrtB = sqrt(Bxy);
   Coordinates::FieldMetric logB = log(Bxy);
-  
+
   if (mesh->isFci()) {
-    mesh->communicate(sqrtB, logB); // Communicate because sqrt and log are broken right now for the F3DPs. 
+    mesh->communicate(
+        sqrtB,
+        logB); // Communicate because sqrt and log are broken right now for the F3DPs.
   }
   const auto Grad_par_logB = Grad_par(logB);
 
@@ -287,20 +289,25 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       }
 
       if (eta.isFci()) {
-	eta.applyBoundary("neumann");
+        eta.applyBoundary("neumann");
       }
-      
+
       eta.getMesh()->communicate(eta);
 
       if (eta.isFci()) {
-	eta.applyParallelBoundary("parallel_neumann_o2");
+        eta.applyParallelBoundary("parallel_neumann_o2");
       } else {
-	eta.applyBoundary("neumann");
+        eta.applyBoundary("neumann");
       }
 
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
-      const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta.asField3DParallel() / Bxy, sqrtB * V.asField3DParallel());
+
+      Field3D dummy;
+      const Field3D div_Pi_cipar =
+          sqrtB
+          * Div_par_K_Grad_par_mod(eta.asField3DParallel() / Bxy,
+                                   sqrtB * V.asField3DParallel(), dummy, true);
 
       add(species["momentum_source"], div_Pi_cipar);
       subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy

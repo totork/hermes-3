@@ -20,7 +20,6 @@
 
 using bout::globals::mesh;
 
-
 BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name,
                                                          Options& alloptions, Solver*)
     : NamedComponent(name,
@@ -57,9 +56,11 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   Coordinates::FieldMetric sqrtB = sqrt(Bxy);
   Coordinates::FieldMetric logB = log(Bxy);
   if (mesh->isFci()) {
-    mesh->communicate(sqrtB, logB); // Communicate because sqrt and log are broken right now for the F3DPs.                                                                                                                                                                       
+    mesh->communicate(
+        sqrtB,
+        logB); // Communicate because sqrt and log are broken right now for the F3DPs.
   }
-  
+
   // Parallel electron viscosity
   Field3D eta = (4. / 3) * 0.73 * P * tau;
 
@@ -83,7 +84,11 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   }
 
   // Save term for output diagnostic
-  viscosity = sqrtB * FV::Div_par_K_Grad_par(eta.asField3DParallel() / Bxy, sqrtB * V.asField3DParallel());
+
+  Field3D dummy;
+  viscosity = sqrtB
+              * Div_par_K_Grad_par_mod(eta.asField3DParallel() / Bxy,
+                                       sqrtB * V.asField3DParallel(), dummy, true);
   add(species["momentum_source"], viscosity);
 }
 
