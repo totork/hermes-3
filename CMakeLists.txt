@@ -97,6 +97,7 @@ set(HERMES_SOURCES
     src/zero_current.cxx
     src/anomalous_diffusion.cxx
     src/anomalous_diffusion_3d.cxx
+    src/lowsources.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
     src/adas_reaction.cxx
@@ -123,6 +124,7 @@ set(HERMES_SOURCES
     include/amjuel_data.hxx
     include/anomalous_diffusion.hxx
     include/anomalous_diffusion_3d.hxx
+    include/lowsources.hxx
     include/classical_diffusion.hxx
     include/cx_reaction.hxx
     include/binormal_stpm.hxx
