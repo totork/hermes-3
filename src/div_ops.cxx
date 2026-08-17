@@ -1826,6 +1826,33 @@ Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin, Field3D& 
 
   Coordinates* coord = fin.getCoordinates();
 
+  if (Kin.isFci()) {
+
+    BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+      const auto iyp = i.yp();
+      const auto iym = i.ym();
+
+      // Upper cell edge
+      const BoutReal c_up = 0.5 * (Kin[i] + Kup[iyp]); // K at the upper boundary
+      const BoutReal gradient_up =
+          (fup[iyp] - fin[i]) / (coord->dy[i] * sqrt(coord->g_22[i]));
+
+      const BoutReal flux_up = c_up * gradient_up * coord->cell_area_yhigh()[i];
+
+      // Lower cell edge
+      const BoutReal c_down = 0.5 * (Kin[i] + Kdown[iym]); // K at the lower boundary
+      const BoutReal gradient_down =
+          (fin[i] - fdown[iym]) / (coord->dy[i] * sqrt(coord->g_22[i]));
+
+      const BoutReal flux_down = c_down * gradient_down * coord->cell_area_ylow()[i];
+
+      // Add the fluxes
+      result[i] = (flux_up - flux_down) / (coord->cell_volume()[i]);
+    }
+
+    return result;
+  }
+
   BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
     // Calculate flux at upper surface
 
@@ -1872,14 +1899,11 @@ Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin, Field3D& 
   return result;
 }
 
-
-
-
 namespace FCI {
 
 std::map<Mesh*, std::weak_ptr<dagp_fv>> dagp_fv_cache;
 
-  std::shared_ptr<dagp_fv> getDagp_fv( Mesh* mesh, BoutReal rho_s0) {
+std::shared_ptr<dagp_fv> getDagp_fv(Mesh* mesh, BoutReal rho_s0) {
   if (auto search = dagp_fv_cache.find(mesh); search != dagp_fv_cache.end()) {
     if (std::shared_ptr<dagp_fv> spt = search->second.lock()) {
       return spt;
@@ -1997,12 +2021,10 @@ inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& 
 }
 } // namespace FCI
 
-
-
-
 // FCI specidic operators that have to be pushed to BOUT++ at some point
 
-const Field3D Div_par_fv(const Field3D& f_in, const Field3D& v_in, const Field3D& wave_speed_in){
+const Field3D Div_par_fv(const Field3D& f_in, const Field3D& v_in,
+                         const Field3D& wave_speed_in) {
   Coordinates* coord = f_in.getCoordinates();
   ASSERT1(f_in.hasParallelSlices());
   ASSERT1(v_in.hasParallelSlices());
@@ -2017,26 +2039,26 @@ const Field3D Div_par_fv(const Field3D& f_in, const Field3D& v_in, const Field3D
   BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
     const auto iyp = i.yp();
     const auto iym = i.ym();
-    
+
     // Maximum local wave speed
 
     const BoutReal amax = wave_speed_in[i];
     BoutReal flux_up = 0.0;
     BoutReal flux_down = 0.0;
 
-    flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cell_area_yhigh()[i];
+    flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax))
+              * coord->cell_area_yhigh()[i];
 
-    flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cell_area_ylow()[i];
+    flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax))
+                * coord->cell_area_ylow()[i];
 
     result[i] = (flux_up - flux_down) / (coord->cell_volume()[i]);
   }
 
   return result;
-  
 }
 
-
-const Field3D Div_par_fvv_fv(const Field3D& f, const Field3D& v, const Field3D& fastest){
+const Field3D Div_par_fvv_fv(const Field3D& f, const Field3D& v, const Field3D& fastest) {
   Coordinates* coord = f.getCoordinates();
 
   ASSERT1(f.hasParallelSlices());
@@ -2051,8 +2073,6 @@ const Field3D Div_par_fvv_fv(const Field3D& f, const Field3D& v, const Field3D& 
   const auto& cellvolume = coord->cell_volume();
   const auto& cellarea_yup = coord->cell_area_yhigh();
   const auto& cellarea_ydown = coord->cell_area_ylow();
-
-
 
   Field3D result{emptyFrom(f)};
 
@@ -2073,11 +2093,9 @@ const Field3D Div_par_fvv_fv(const Field3D& f, const Field3D& v, const Field3D& 
 
     BoutReal midflux_down = fmid_down * vmid_down * vmid_down;
     BoutReal penflux_down = -amax * fmid_down * (v[i] - v_down[iym]);
-    BoutReal flux_down = (midflux_down + penflux_down) * cellarea_ydown[i];    
-
+    BoutReal flux_down = (midflux_down + penflux_down) * cellarea_ydown[i];
 
     result[i] = (flux_up - flux_down) / cellvolume[i];
-    
   }
   return result;
 }
