@@ -501,8 +501,8 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
     if (abs(pnt.offset()) == 1) { // Only subtract flux when the cell is actually in direct contact with the sheath
       
-      BoutReal q = ((gamma_e - 1 - 1 / (electron_adiabatic - 1)) * tesheath
-		    - 0.5 * Me * SQ(vesheath))
+      BoutReal q = floor(((gamma_e - 1 - 1 / (electron_adiabatic - 1)) * tesheath
+			  - 0.5 * Me * SQ(vesheath)), 0.0)
 	* nesheath * vesheath;
 
       ASSERT2(q * pnt.dir() >= 0.0);
