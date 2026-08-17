@@ -16,8 +16,6 @@ Field3D LowSources::sourceterm(const Field3D ar, const BoutReal val, const BoutR
                                const BoutReal width) {
   Field3D result = 0.0;
 
-  const BoutReal eps = 1e-12;
-
   BOUT_FOR(i, ar.getRegion("RGN_NOY")) {
     // Compute ratio: 1 - (ar / val)
     BoutReal ratio = 1.0 - (ar[i] / val);
@@ -39,7 +37,6 @@ LowSources::LowSources(std::string name, Options& alloptions, Solver*)
                             readWrite("species:{name}:{output}")}) {
   // Normalisations
   const Options& units = alloptions["units"];
-  const BoutReal rho_s0 = units["meters"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
