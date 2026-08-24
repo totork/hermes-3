@@ -131,6 +131,13 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Use parallel dirichlet boundary conditions for the plasma?")
                    .withDefault<bool>(true);
 
+  Dnn_update_every = options["Dnn_update_every"]
+    .doc("Lag the calculation by a certain number of timesteps?")
+    .withDefault<BoutReal>(-1.0);
+
+  Dnn_last_update = -10000000.0;
+  
+  
   n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
@@ -375,57 +382,70 @@ void NeutralMixed::finally(const Options& state) {
   //
   //
 
-  
-  Field3D Rnn =
-    sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+  BoutReal this_time = get<BoutReal>(state["time"]);
 
-  if (localstate.isSet("collision_frequency") && flux_limit > 0.0) {
-    Dnn = (Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]));
-  } else if (localstate.isSet("collision_frequency")) {
-    // Dnn = Vth^2 / sigma
-    Dnn = (Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+  // When the diffusion coefficient is not recalculated
+  if (Dnn_update_every > 0.0 && (this_time < (Dnn_last_update + Dnn_update_every)) && Dnn_cached.isAllocated()) {
+    Dnn = 1.0 * Dnn_cached;
   } else {
-    Dnn = (Tnlim / AA) / Rnn;
-  }
+  
+  
+    Field3D Rnn =
+      sqrt(Tnlim / AA) / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
 
-  if (LP_limit) {
-    Field3D vth =  LP_speed * sqrt(Tnlim / AA);
-    Field3D nu_eff = get<Field3D>(localstate["collision_frequency"]) + Rnn;
-    Field3D lambda_mfp = vth / nu_eff;
-    BoutReal eps = SQ(1. / neutral_lmax);
-
-    Field3D gradlogP = sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps);
-    Field3D R = lambda_mfp * gradlogP;
-
-    // Levermore-Pomraning limiter
-    lambdaLP = (2.0 + R) / (6.0 + 3.0 * R + SQ(R));
-
-    // Classical diffusion
-    Field3D Dclassical =
-      (Tnlim / AA) / nu_eff;
-
-    // Flux-limited diffusion
-    Dnn = 3.0 * lambdaLP * Dclassical;
-  }
-
-  if (flux_limit > 0.0) {
-    // Apply flux limit to diffusion,
-    // using the local thermal speed and pressure gradient magnitude
-    // Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
-    BoutReal eps = SQ(1. / neutral_lmax);
-    Field3D Dmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps));
-    BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
-  } else if (limit_length > 0.0) {
-    Field3D denom = 1.0 + (Dnn / (sqrt(Tnlim / AA) * limit_length));
-    Dnn = Dnn / denom;
-  }
-
-  if (diffusion_limit > 0.0) {
-    // Impose an upper limit on the diffusion coefficient
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+    if (localstate.isSet("collision_frequency") && flux_limit > 0.0) {
+      Dnn = (Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]));
+    } else if (localstate.isSet("collision_frequency")) {
+      // Dnn = Vth^2 / sigma
+      Dnn = (Tnlim / AA) / (get<Field3D>(localstate["collision_frequency"]) + Rnn);
+    } else {
+      Dnn = (Tnlim / AA) / Rnn;
     }
+  
+  
+
+    if (LP_limit) {
+      Field3D vth =  LP_speed * sqrt(Tnlim / AA);
+      Field3D nu_eff = get<Field3D>(localstate["collision_frequency"]) + Rnn;
+      Field3D lambda_mfp = vth / nu_eff;
+      BoutReal eps = SQ(1. / neutral_lmax);
+
+      Field3D gradlogP = sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps);
+      Field3D R = lambda_mfp * gradlogP;
+
+      // Levermore-Pomraning limiter
+      lambdaLP = (2.0 + R) / (6.0 + 3.0 * R + SQ(R));
+
+      // Classical diffusion
+      Field3D Dclassical =
+	(Tnlim / AA) / nu_eff;
+
+      // Flux-limited diffusion
+      Dnn = 3.0 * lambdaLP * Dclassical;
+    }
+
+    if (flux_limit > 0.0) {
+      // Apply flux limit to diffusion,
+      // using the local thermal speed and pressure gradient magnitude
+      // Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
+      BoutReal eps = SQ(1. / neutral_lmax);
+      Field3D Dmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps));
+      BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
+    } else if (limit_length > 0.0) {
+      Field3D denom = 1.0 + (Dnn / (sqrt(Tnlim / AA) * limit_length));
+      Dnn = Dnn / denom;
+    }
+
+    if (diffusion_limit > 0.0) {
+      // Impose an upper limit on the diffusion coefficient
+      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+	Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+      }
+    }
+    Dnn_cached = 1.0 * Dnn;
+    Dnn_last_update = 1.0 * this_time;
   }
+
   
   if (disable_Dnn) {
     Dnn = 0.0;
@@ -474,8 +494,9 @@ void NeutralMixed::finally(const Options& state) {
   // Heat conductivity 
   // Note: This is kappa_n = (5/2) * Pn / (m * nu)
   //       where nu is the collision frequency used in Dnn
-  kappa_n = (5. / 2) * DnnNn;
 
+  kappa_n = (5. / 2) * DnnNn;
+  
   // Viscosity
   // Relationship between heat conduction and viscosity for neutral
   // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
