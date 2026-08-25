@@ -203,6 +203,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   diagnose =
       options["diagnose"].doc("Save additional diagnostics?").withDefault<bool>(false);
 
+  output_transport = options["output_transport"].doc("Save the transport coefficients?").withDefault<bool>(diagnose);
+  
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
 
   sound_speed_Tfloor = options["sound_speed_Tfloor"].doc("Particle atomic mass. Proton = 1").withDefault(0.0)/ Tnorm;
@@ -601,9 +603,9 @@ void NeutralMixed::finally(const Options& state) {
     }
 
     if (include_cond) {
-      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(anomalous_conduction * Nn, Tn, ef_cond_par_ylow, false);
+      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(anomalous_conduction , Tn, ef_cond_par_ylow, false);
       bool upwind = false;
-      ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction * Nn, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+      ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction , Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
     }
   
     Sp = pressure_source;
@@ -840,6 +842,25 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"source", "neutral_mixed"}});
   }
+
+  if (output_transport) {
+    set_with_attrs(state[std::string("Dnn") + name], Dnn,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+
+    set_with_attrs(state[std::string("kappa_n") + name], kappa_n,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Nnorm * Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "conduction coefficient"},
+                    {"long_name", name + " conduction coefficient"},
+                    {"source", "neutral_mixed"}});
+
+  }
   if (diagnose) {
 
     set_with_attrs(state[std::string("Nh_up")], Nh_up,
@@ -859,13 +880,7 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "temperature"},
                     {"long_name", name + " temperature"},
                     {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("Dnn") + name], Dnn,
-                   {{"time_dimension", "t"},
-                    {"units", "m^2/s"},
-                    {"conversion", Cs0 * Cs0 / Omega_ci},
-                    {"standard_name", "diffusion coefficient"},
-                    {"long_name", name + " diffusion coefficient"},
-                    {"source", "neutral_mixed"}});
+    
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
                     {"units", "m^-3 s^-1"},

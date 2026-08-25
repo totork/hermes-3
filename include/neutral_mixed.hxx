@@ -92,7 +92,7 @@ private:
   BoutReal sound_speed_Tfloor;
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
-
+  bool output_transport;
   Field3D Nh_up, Nh_down;
   
   // Flow diagnostics
