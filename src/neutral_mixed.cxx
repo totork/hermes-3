@@ -131,6 +131,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Use parallel dirichlet boundary conditions for the plasma?")
                    .withDefault<bool>(true);
 
+  cond_factor = options["conduction_factor"]
+    .doc("Multiplier of kappa_n, allows to change the neutral conduction")
+    .withDefault<BoutReal>(1.0);
+  
   Dnn_update_every = options["Dnn_update_every"]
     .doc("Lag the calculation by a certain number of timesteps?")
     .withDefault<BoutReal>(-1.0);
@@ -187,6 +191,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                           .doc("Include neutral gas heat conduction?")
                           .withDefault<bool>(false);
 
+  inherited_T = options["inherited_T"]
+    .doc("Inherit temperatur from main ion species h?")
+    .withDefault<bool>(false);
+  
   freeze_low_density = options["freeze_low_density"]
     .doc("Freeze evolution in low density regions?")
     .withDefault<bool>(false);
@@ -277,22 +285,21 @@ void NeutralMixed::transform(Options& state) {
 
   Nn.applyParallelBoundary();
   NVn.applyParallelBoundary();
-
+  
   if (!evolve_pressure) {
     if (inherited_T) {
       Options& allspecies = state["species"];
       Options& donor_species = allspecies["h+"];
       const auto donor_T = GET_NOBOUNDARY(Field3D, donor_species["temperature"]);
-      Pn = donor_T * Nn;
+      Pn = floor(donor_T, temperature_floor) * Nn;
     } else {
       Pn = initial_Tn * Nn;
     }
   }
-
   Pn.applyBoundary();
   mesh->communicate(Pn);
   Pn.applyParallelBoundary();
-
+  
   
   Pn_solver = Pn;
   
@@ -308,7 +315,7 @@ void NeutralMixed::transform(Options& state) {
 
   // Nnlim Used where division by neutral density is needed
   Nnlim = floor(Nn, density_floor);  
-  Tn = Pn / Nnlim;
+  Tn = floor(Pn / Nnlim, temperature_floor);
   Pn_solver = Pn;
   Pn = Tn*Nn;
   
@@ -584,16 +591,16 @@ void NeutralMixed::finally(const Options& state) {
     //ef_adv_perp_ylow *= 5/2;
 
     if (neutral_conduction) {
-      ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
+      ddt(Pn) += cond_factor * (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
     
       if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
-	ddt(Pn) += (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
+	ddt(Pn) += cond_factor * (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
       } else {
 	bool upwind = false;
 	if (!use_finite_difference) {
-	  ddt(Pn) += (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+	  ddt(Pn) += cond_factor * (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
 	} else {
-	  ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
+	  ddt(Pn) += cond_factor * (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
 	}
       }
       // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
@@ -805,6 +812,17 @@ void NeutralMixed::outputVars(Options& state) {
                                                 {"species", name},
                                                 {"source", "neutral_mixed"}});
 
+  if (!evolve_pressure && inherited_T) {
+    set_with_attrs(state[std::string("P") + name], Pn,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("T") + name], Tn,
+                   {{"time_dimension", "t"},
+                    {"units", "eV"},
+                    {"source", "neutral_mixed"}});
+  }
+  
   state[std::string("NV") + name].setAttributes(
       {{"time_dimension", "t"},
        {"units", "kg / m^2 / s"},

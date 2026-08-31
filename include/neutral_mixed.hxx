@@ -85,7 +85,7 @@ private:
 
   BoutReal Dnn_last_update, Dnn_update_every;
   Field3D Dnn_cached, kappa_n_cached, eta_n_cached;
-  
+  BoutReal cond_factor;
   Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
