@@ -110,6 +110,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   limit_length = options["limit_length"]
                  .doc("Grillix style decay length.")
                  .withDefault(-1.0) / meters;
+
+  simplified_diffusion = options["simplified_diffusion"]
+                 .doc("Simplify the pressure diffusion by omitting the spatial variation of the diffusion coefficient?")
+                 .withDefault<bool>(false);
   
   dissipative = options["dissipative"]
                  .doc("Use strong dissipation in parallel divergence?")
@@ -273,6 +277,12 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   if (Nn.isFci()) {
     dagp = FCI::getDagp_fv(alloptions, mesh);
   }
+
+  ones = 1.0;
+  ones.applyBoundary("neumann");
+  mesh->communicate(ones);
+  ones.applyParallelBoundary("parallel_neumann_o1");
+  
 }
 
 void NeutralMixed::transform(Options& state) {
@@ -528,15 +538,21 @@ void NeutralMixed::finally(const Options& state) {
   
   if (!Nn.isFci()) {
     
-    ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) += simplified_diffusion?
+      DnnNn * Div_a_Grad_perp_flows(ones, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow)
+      :Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
     
   } else {
     
     bool upwind = false;
     if (!use_finite_difference) {
-      ddt(Nn) += (*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
+      ddt(Nn) += simplified_diffusion?
+	DnnNn * (*dagp)(ones, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind)
+	:(*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
     } else {
-      ddt(Nn) += Div_a_Grad_perp_curv(DnnNn, logPnlim);
+      ddt(Nn) += simplified_diffusion?
+	DnnNn * Div_a_Grad_perp_curv(ones, logPnlim)
+	:Div_a_Grad_perp_curv(DnnNn, logPnlim);
     }
   }
 
@@ -579,7 +595,9 @@ void NeutralMixed::finally(const Options& state) {
     } else {
       bool upwind = false;
       if (!use_finite_difference) { 
-	ddt(Pn) +=  (*dagp)(Dnn * e_plus_p, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+	ddt(Pn) += simplified_diffusion?
+	  Dnn * e_plus_p * (*dagp)(ones, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind)
+	  :(*dagp)(Dnn * e_plus_p, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
       } else {
 	ddt(Pn) +=  Div_a_Grad_perp_curv(Dnn * e_plus_p, logPnlim);
       }
@@ -591,14 +609,18 @@ void NeutralMixed::finally(const Options& state) {
     //ef_adv_perp_ylow *= 5/2;
 
     if (neutral_conduction) {
-      ddt(Pn) += cond_factor * (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
+      ddt(Pn) += simplified_diffusion?
+	cond_factor * kappa_n * (2.0/3.0) * Div_par_K_Grad_par_mod(ones, Tn, ef_cond_par_ylow, false)
+	:cond_factor * (2.0/3.0) * Div_par_K_Grad_par_mod(kappa_n, Tn, ef_cond_par_ylow, false);                // Parallel conduction
     
       if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
 	ddt(Pn) += cond_factor * (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
       } else {
 	bool upwind = false;
 	if (!use_finite_difference) {
-	  ddt(Pn) += cond_factor * (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+	  ddt(Pn) += simplified_diffusion?
+	    cond_factor * kappa_n * (2.0 / 3.0) * (*dagp)(ones, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind)
+	    :cond_factor * (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
 	} else {
 	  ddt(Pn) += cond_factor * (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
 	}
@@ -648,7 +670,9 @@ void NeutralMixed::finally(const Options& state) {
     } else {
       bool upwind = false;
       if (!use_finite_difference) {
-	ddt(NVn) += (*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
+	ddt(NVn) += simplified_diffusion?
+	  DnnNVn * (*dagp)(ones , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind)
+	  :(*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
       } else {
 	ddt(NVn) += Div_a_Grad_perp_curv(DnnNVn, logPnlim);
       }
@@ -664,14 +688,18 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = Div_par_K_Grad_par_mod(eta_n , Vn , mf_visc_par_ylow , false); // Parallel viscosity
+      Field3D viscosity_source = simplified_diffusion?
+	eta_n * Div_par_K_Grad_par_mod(ones , Vn , mf_visc_par_ylow , false)
+	:Div_par_K_Grad_par_mod(eta_n , Vn , mf_visc_par_ylow , false); // Parallel viscosity
       
       if (!NVn.isFci()) {                                                                     // Perpendicular advection                                                                                          
 	viscosity_source += Div_a_Grad_perp_flows(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow);
       } else {
 	bool upwind = false;
 	if (!use_finite_difference) {
-	  viscosity_source += (*dagp)(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow, upwind);
+	  viscosity_source += simplified_diffusion?
+	    eta_n * (*dagp)(ones , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow, upwind)
+	    :(*dagp)(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow, upwind);
 	} else {
 	  viscosity_source += Div_a_Grad_perp_curv(eta_n, Vn);
 	}

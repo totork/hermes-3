@@ -46,6 +46,7 @@ private:
   bool isMMS;
   Field3D Pn_solver;
   bool use_eos;
+  Field3D ones;
   bool viscous_heating;
   BoutReal AA; ///< Atomic mass (proton = 1)
   BoutReal n_lowsource, T_lowsource, lowsource_scale;
@@ -82,7 +83,7 @@ private:
   bool precondition {true}; ///< Enable preconditioner?
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
-
+  bool simplified_diffusion;
   BoutReal Dnn_last_update, Dnn_update_every;
   Field3D Dnn_cached, kappa_n_cached, eta_n_cached;
   BoutReal cond_factor;
