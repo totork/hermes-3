@@ -3,7 +3,10 @@
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/vecops.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/field_factory.hxx>
+
 
 #include "../include/div_ops.hxx"
 #include "../include/hermes_build_config.hxx"
@@ -164,6 +167,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
   exponential_source = options["exponential_source"].withDefault<bool>(false);
+
+  lowsource_balance = options["lowsource_balance"].withDefault<bool>(false);
+  balance_species = options["balance_species"].withDefault<std::string>("h+");
+  
   neutral_lmax = options["neutral_lmax"].doc("Largest distance to the target, limits diffusion").withDefault<BoutReal>(0.1) / meters;
   
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
@@ -409,6 +416,23 @@ void NeutralMixed::transform(Options& state) {
   set(localstate["momentum"], NVn);
   set(localstate["velocity"], Vn);
   set(localstate["temperature"], Tn);
+
+  if (n_lowsource > 0.0) {
+    Field3D a = low_sourceterm(Nn, n_lowsource, lowsource_scale, exponential_source);
+    localstate["density_source"] = a;
+    if (evolve_pressure) {
+      localstate["energy_source"] = 3.0 / 2.0 * Tn * a;
+    }
+
+    if (lowsource_balance) {
+      Options& allspecies = state["species"];
+      Options& reciever_species = allspecies[balance_species];
+      add(reciever_species["density_source"], -a);      
+    }
+
+  }
+
+  
 }
 
 void NeutralMixed::finally(const Options& state) {
@@ -599,13 +623,6 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Nn) += Sn; // Always add density_source
   }
 
-  if (n_lowsource > 0.0) {
-    Field3D a = low_sourceterm(Nn, n_lowsource, lowsource_scale, exponential_source);
-    ddt(Nn) += a;
-    if (evolve_pressure) {
-      ddt(Pn) += a * Tnlim;
-    }
-  } 
   
   
   /////////////////////////////////////////////////////

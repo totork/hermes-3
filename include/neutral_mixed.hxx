@@ -50,6 +50,8 @@ private:
   bool viscous_heating;
   BoutReal AA; ///< Atomic mass (proton = 1)
   BoutReal n_lowsource, T_lowsource, lowsource_scale;
+  bool lowsource_balance;
+  std::string balance_species;
   BoutReal low_N_lim;
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
