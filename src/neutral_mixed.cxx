@@ -14,6 +14,20 @@ using bout::globals::mesh;
 using ParLimiter = FV::Upwind;
 
 
+BoutReal smoothstep(BoutReal x, BoutReal f1, BoutReal f2) {
+
+  if (x <= f1) {
+    return 0.0;
+  } else if (x >= f2) {
+    return 1.0;
+  } else {
+    BoutReal t = (x-f1) / (f2 - f1);
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);    
+  }
+  
+}
+
+
 inline BoutReal softFloor(BoutReal value, BoutReal min) {
   value = std::max(value, 0.0);
   return value + min * exp(-value / min);
@@ -168,6 +182,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(false);
 
+  precon_mode = options["precon_mode"]
+                     .doc("Which preconditioner model to choose?")
+                     .withDefault<int>(1);
+  
   lax_flux = options["lax_flux"]
                      .doc("Enable stabilising lax flux?")
                      .withDefault<bool>(true);
@@ -220,6 +238,22 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   AA = options["AA"].doc("Particle atomic mass. Proton = 1").withDefault(1.0);
 
   sound_speed_Tfloor = options["sound_speed_Tfloor"].doc("Particle atomic mass. Proton = 1").withDefault(0.0)/ Tnorm;
+
+  // Core equilibriation
+
+  equi_species = options["equi_species"].withDefault<std::string>("h+");
+
+  core_equilibriate = options["core_equilibriate"].withDefault<bool>(false);
+
+  tau_eq = options["tau_eq"].withDefault<BoutReal>(1e-6) * Omega_ci;
+
+  n_thresh = options["n_thresh"].withDefault<BoutReal>(1e15) / Nnorm;
+
+  delta_n = options["delta_n"].withDefault<BoutReal>(1e14) / Nnorm;
+
+  t_thresh = options["t_thresh"].withDefault<BoutReal>(120.0) / Tnorm;
+
+  delta_t = options["delta_t"].withDefault<BoutReal>(5.0) / Tnorm;
   
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
@@ -802,6 +836,22 @@ void NeutralMixed::finally(const Options& state) {
   Pn = Pn_solver;
 
 
+  if (core_equilibriate) {
+    const Options& allspecies = state["species"];
+    const Options& donor_species = allspecies[equi_species];
+    const auto donor_T = GET_NOBOUNDARY(Field3D, donor_species["temperature"]);
+    
+    Field3D S_thresh = 0.0;
+    BOUT_FOR(i, Pn.getRegion("RGN_NOY")) {
+      S_thresh[i] = smoothstep(Tn[i], donor_T[i] , donor_T[i] + delta_t);
+    }
+    
+
+    ddt(Pn) -= Nn * S_thresh * (Tn - donor_T) / tau_eq;
+    
+  }
+
+  
   if (disable_ddt) {
     ddt(Nn) = 0.0;
     if (evolve_momentum) {
@@ -1140,22 +1190,25 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
   }
   const auto& species = state["species"][name];
  
-  
-  // Set the coefficient in Div_par( B * Grad_par )
-  Field3D coeff = (5.0 / 3.0) *  gamma * Dnn;
-  coeff.applyBoundary("neumann");
-  mesh->communicate(coeff);
-  
-  inv->setCoefA(1.0);
-  inv->setCoefD(-coeff);
-  inv->setCoefC1(-1. / ((gamma * 5. / 3) * Dnn));
-  inv->setCoefC2(logPnlim);
-  
-  Field3D dT = ddt(Pn);
-  dT.applyBoundary("neumann");
-  mesh->communicate(dT);
-  Field3D dummy = 0.0;
-  ddt(Pn) = inv->solve(dT, dT);
-
+  if (precon_mode == 1) {
+    // Set the coefficient in Div_par( B * Grad_par )
+    Field3D coeff = (5.0 / 3.0) *  gamma * Dnn;
+    coeff.applyBoundary("neumann");
+    mesh->communicate(coeff);
+    
+    inv->setCoefA(1.0);
+    inv->setCoefD(-coeff);
+    inv->setCoefC1(-1. / ((gamma * 5. / 3) * Dnn));
+    inv->setCoefC2(logPnlim);
+    
+    Field3D dT = ddt(Pn);
+    dT.applyBoundary("neumann");
+    mesh->communicate(dT);
+    Field3D dummy = 0.0;
+    ddt(Pn) = inv->solve(dT, dT);
+    
+  } else {
+    throw BoutException("Wrong preconditioner mode chosen in neutral_mixed");
+  }
   
 }

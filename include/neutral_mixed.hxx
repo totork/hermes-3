@@ -95,7 +95,7 @@ private:
   bool diagnose; ///< Save additional diagnostics?
   bool output_transport;
   Field3D Nh_up, Nh_down;
-  
+  int precon_mode;
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
   Field3D mf_adv_perp_xlow, mf_adv_perp_ylow, mf_adv_par_ylow;
@@ -103,6 +103,10 @@ private:
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
 
+  std::string equi_species;
+  bool core_equilibriate;
+  BoutReal tau_eq, n_thresh, delta_n, t_thresh, delta_t;
+  
   const Field3D Grad_x(Field3D& a) {
     Mesh* mesh = a.getMesh();
     Coordinates* coord = mesh->getCoordinates();
