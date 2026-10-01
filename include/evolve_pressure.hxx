@@ -110,7 +110,7 @@ private:
   BoutReal adapt_source;
 
   BoutReal tau_1, lambda_sh, tau_0;
-  
+  Field3D tau;
   BoutReal hyper_z; ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T
   BoutReal hyper_p;

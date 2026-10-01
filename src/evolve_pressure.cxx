@@ -451,7 +451,6 @@ void EvolvePressure::finally(const Options& state) {
     // Calculate ion collision times
     //const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-10);
 
-    Field3D tau = 0.0;
     if (spitzer_conductivity) {
       Field3D T32 = T * sqrt(T);
       
@@ -700,6 +699,15 @@ void EvolvePressure::outputVars(Options& state) {
                       {"long_name", name + " heat conduction coefficient"},
                       {"species", name},
                       {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[std::string("tau_") + name], tau,
+                     {{"time_dimension", "t"},
+                      {"units", "1 / s"},
+                      {"conversion", Omega_ci},
+                      {"long_name", name + " collision frequency"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+      
     }
     set_with_attrs(state[std::string("T") + name], T,
                    {{"time_dimension", "t"},
