@@ -135,6 +135,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   dissipative = options["dissipative"]
                  .doc("Use strong dissipation in parallel divergence?")
                  .withDefault(true);
+
+  upwinding = options["upwinding"]
+                 .doc("Use strong dissipation in perpendicular diffusion?")
+                 .withDefault(false);
   
   use_finite_difference = options["use_finite_difference"]
                    .doc("Use finite difference for perpendicular diffusion?")
@@ -155,6 +159,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   cond_factor = options["conduction_factor"]
     .doc("Multiplier of kappa_n, allows to change the neutral conduction")
     .withDefault<BoutReal>(1.0);
+
+  diffusion_mode = options["diffusion_mode"].withDefault<int>(1);
   
   Dnn_update_every = options["Dnn_update_every"]
     .doc("Lag the calculation by a certain number of timesteps?")
@@ -167,7 +173,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
   exponential_source = options["exponential_source"].withDefault<bool>(false);
-  lowsource_width = options["lowsource_width"].withDefault(1e13) / Nnorm;
+  lowsource_width = options["lowsource_width"].withDefault(-1.0) / Nnorm;
 
   lowsource_balance = options["lowsource_balance"].withDefault<bool>(false);
   balance_species = options["balance_species"].withDefault<std::string>("h+");
@@ -419,7 +425,13 @@ void NeutralMixed::transform(Options& state) {
   set(localstate["temperature"], Tn);
 
   if (n_lowsource > 0.0) {
-    Field3D a = smooth_low_sourceterm(Nn, n_lowsource, lowsource_scale, lowsource_width);
+    Field3D a;
+    if (lowsource_width>0) {
+      a = smooth_low_sourceterm(Nn, n_lowsource, lowsource_scale, lowsource_width);
+    } else {
+      a = low_sourceterm(Nn, n_lowsource, lowsource_scale, exponential_source);
+    }
+
     localstate["density_source"] = a;
     if (evolve_pressure) {
       localstate["energy_source"] = 3.0 / 2.0 * Tn * a;
@@ -602,17 +614,9 @@ void NeutralMixed::finally(const Options& state) {
       :Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
     
   } else {
-    
-    bool upwind = false;
-    if (!use_finite_difference) {
-      ddt(Nn) += simplified_diffusion?
-	DnnNn * (*dagp)(ones, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind)
-	:(*dagp)(DnnNn, logPnlim,pf_adv_perp_xlow, pf_adv_perp_ylow, upwind);
-    } else {
-      ddt(Nn) += simplified_diffusion?
-	DnnNn * Div_a_Grad_perp_curv(ones, logPnlim)
-	:Div_a_Grad_perp_curv(DnnNn, logPnlim);
-    }
+
+    ddt(Nn) += Div_a_Grad_perp_neutrals(DnnNn, logPnlim, dagp, upwinding, diffusion_mode);
+
   }
 
   
@@ -645,14 +649,9 @@ void NeutralMixed::finally(const Options& state) {
     if (!Pn.isFci()) {                                                                     // Perpendicular advection
       ddt(Pn) +=  Div_a_Grad_perp_flows(Dnn * e_plus_p, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);  
     } else {
-      bool upwind = false;
-      if (!use_finite_difference) { 
-	ddt(Pn) += simplified_diffusion?
-	  Dnn * e_plus_p * (*dagp)(ones, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind)
-	  :(*dagp)(Dnn * e_plus_p, logPnlim,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
-      } else {
-	ddt(Pn) +=  Div_a_Grad_perp_curv(Dnn * e_plus_p, logPnlim);
-      }
+
+      ddt(Pn) += Div_a_Grad_perp_neutrals(Dnn * e_plus_p, logPnlim, dagp, upwinding, diffusion_mode);
+      
     }
 
     // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -668,14 +667,8 @@ void NeutralMixed::finally(const Options& state) {
       if (!Pn.isFci()) {                                                                     // Perpendicular advection                                                                                             
 	ddt(Pn) += cond_factor * (2. / 3) * Div_a_Grad_perp_flows(kappa_n , Tn , ef_cond_perp_xlow , ef_cond_perp_ylow); 
       } else {
-	bool upwind = false;
-	if (!use_finite_difference) {
-	  ddt(Pn) += simplified_diffusion?
-	    cond_factor * kappa_n * (2.0 / 3.0) * (*dagp)(ones, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind)
-	    :cond_factor * (2.0 / 3.0) * (*dagp)(kappa_n, Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
-	} else {
-	  ddt(Pn) += cond_factor * (2.0 / 3.0) * Div_a_Grad_perp_curv(kappa_n, Tn);
-	}
+
+	ddt(Pn) += cond_factor * (2.0 / 3.0) * Div_a_Grad_perp_neutrals(kappa_n, Tn, dagp, upwinding, diffusion_mode);
       }
       // The factor here is likely 3/2 as this is pure energy flow, but needs checking.                                                                                                                             
       //ef_cond_perp_xlow *= 3/2;
@@ -685,8 +678,9 @@ void NeutralMixed::finally(const Options& state) {
 
     if (include_cond) {
       ddt(Pn) += (2.0/3.0) * Div_par_K_Grad_par_mod(anomalous_conduction , Tn, ef_cond_par_ylow, false);
-      bool upwind = false;
-      ddt(Pn) += (2.0 / 3.0) * (*dagp)(anomalous_conduction , Tn,ef_adv_perp_xlow, ef_adv_perp_ylow, upwind);
+
+      ddt(Pn) += (2.0 / 3.0) * Div_a_Grad_perp_neutrals(anomalous_conduction , Tn, dagp, upwinding, diffusion_mode);
+      
     }
   
     Sp = pressure_source;
@@ -720,14 +714,9 @@ void NeutralMixed::finally(const Options& state) {
     if (!NVn.isFci()) {                                                                     // Perpendicular advection
       ddt(NVn) += Div_a_Grad_perp_flows(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow);
     } else {
-      bool upwind = false;
-      if (!use_finite_difference) {
-	ddt(NVn) += simplified_diffusion?
-	  DnnNVn * (*dagp)(ones , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind)
-	  :(*dagp)(DnnNVn , logPnlim , mf_adv_perp_xlow , mf_adv_perp_ylow, upwind);
-      } else {
-	ddt(NVn) += Div_a_Grad_perp_curv(DnnNVn, logPnlim);
-      }
+
+      ddt(NVn) += Div_a_Grad_perp_neutrals(DnnNVn, logPnlim, dagp, upwinding, diffusion_mode);
+      
     }
     
     if (neutral_viscosity) {
@@ -747,14 +736,11 @@ void NeutralMixed::finally(const Options& state) {
       if (!NVn.isFci()) {                                                                     // Perpendicular advection                                                                                          
 	viscosity_source += Div_a_Grad_perp_flows(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow);
       } else {
-	bool upwind = false;
-	if (!use_finite_difference) {
-	  viscosity_source += simplified_diffusion?
-	    eta_n * (*dagp)(ones , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow, upwind)
-	    :(*dagp)(eta_n , Vn , mf_visc_perp_xlow , mf_visc_perp_ylow, upwind);
-	} else {
-	  viscosity_source += Div_a_Grad_perp_curv(eta_n, Vn);
-	}
+
+
+	viscosity_source += Div_a_Grad_perp_neutrals(eta_n, Vn, dagp, upwinding, diffusion_mode);
+
+	
       }
       
       ddt(NVn) += viscosity_source;
@@ -803,8 +789,8 @@ void NeutralMixed::finally(const Options& state) {
     BOUT_FOR(i, Pn.getRegion("RGN_NOY")) {
       // Local average density.
       // The purpose is to turn on evolution when nearby cells contain significant density.
-      const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.yp()] + Nn[i.ym()]);
-      const BoutReal factor = exp(- density_floor / meanNn);
+      const BoutReal meanNn = (1./6) * (2 * Nn[i] + Nn[i.xp()] + Nn[i.xm()] + Nn[i.zp()] + Nn[i.zm()]);
+      const BoutReal factor = exp(- n_lowsource / meanNn);
       ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
       ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
       ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];

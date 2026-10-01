@@ -59,6 +59,7 @@ private:
   BoutReal temperature_floor;
   bool sheath_ydown, sheath_yup;
   bool dissipative;
+  bool upwinding;
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool exponential_source;
@@ -82,6 +83,7 @@ private:
   Field3D initial_Tn;
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
   BoutReal neutral_lmax;
+  int diffusion_mode;
   bool precondition {true}; ///< Enable preconditioner?
   bool lax_flux; ///< Use Lax flux for advection terms
   std::unique_ptr<Laplacian> inv; ///< Laplacian inversion used for preconditioning
@@ -155,11 +157,14 @@ private:
     return DDZ(a) / sqrt(coord->g_33);
   }
   
-  Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
-    if (a.isFci()) {
-      return (*dagp)(a, b, false);
+  Field3D Div_a_Grad_perp_neutrals(Field3D a, Field3D b, std::shared_ptr<FCI::dagp_fv> dagp_op, bool upwind, int mode) {
+
+    if (mode == 1) {
+      return (*dagp_op)(a,b,upwind);
+    } else if (mode ==2 ) {
+      return Div_a_Grad_perp_curv(a, b);
     }
-    return FV::Div_a_Grad_perp(a, b);
+    
   }
 };
 
