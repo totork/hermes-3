@@ -29,7 +29,7 @@ type = neutral_mixed
 
 AA = 1.0
 
-use_finite_difference = true
+diffusion_mode = 2
 neutral_lmax = 0.02
 evolve_momentum = false
 isMMS = true
