@@ -108,6 +108,39 @@ private:
   std::string equi_species;
   bool core_equilibriate;
   BoutReal tau_eq, n_thresh, delta_n, t_thresh, delta_t;
+  BoutReal lowsource_width;
+
+  const Field3D smooth_low_sourceterm(const Field3D& f, const BoutReal lowvalue,
+                              const BoutReal scalefactor,
+                              const BoutReal width) {
+    Field3D result = 0.0;
+
+    ASSERT1(width > 0.0);
+    
+    BOUT_FOR(i, f.getRegion("RGN_NOY")) {
+      const BoutReal diff = f[i] - lowvalue;
+      const BoutReal s = -diff / width; // = (lowvalue - f) / width
+      
+      if (s <= -1.0) {
+	// Comfortably above threshold: no source
+	result[i] = 0.0;
+      } else if (s >= 1.0) {
+	// Comfortably below threshold: original linear ramp
+	result[i] = -diff / scalefactor;
+      } else {
+	// Smooth C2 transition region: quintic Hermite blend
+	const BoutReal x = 0.5 * (s + 1.0);
+	const BoutReal x3 = x * x * x;
+	const BoutReal x4 = x3 * x;
+	const BoutReal p = 2.0 * x3 - x4; // 0 at x=0, 1 at x=1, matching derivatives
+	
+	result[i] = (width / scalefactor) * p;
+      }
+    }
+    
+    return result;
+  }
+  
   
   const Field3D Grad_x(Field3D& a) {
     Mesh* mesh = a.getMesh();

@@ -167,6 +167,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
   lowsource_scale = options["lowsource_scale"].withDefault(1e-5) * Omega_ci;
   exponential_source = options["exponential_source"].withDefault<bool>(false);
+  lowsource_width = options["lowsource_width"].withDefault(1e13) / Nnorm;
 
   lowsource_balance = options["lowsource_balance"].withDefault<bool>(false);
   balance_species = options["balance_species"].withDefault<std::string>("h+");
@@ -418,7 +419,7 @@ void NeutralMixed::transform(Options& state) {
   set(localstate["temperature"], Tn);
 
   if (n_lowsource > 0.0) {
-    Field3D a = low_sourceterm(Nn, n_lowsource, lowsource_scale, exponential_source);
+    Field3D a = smooth_low_sourceterm(Nn, n_lowsource, lowsource_scale, lowsource_width);
     localstate["density_source"] = a;
     if (evolve_pressure) {
       localstate["energy_source"] = 3.0 / 2.0 * Tn * a;
