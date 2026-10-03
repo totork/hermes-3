@@ -79,6 +79,7 @@ private:
   bool evolve_momentum; ///< Evolve parallel momentum?
   bool evolve_pressure;
   bool freeze_low_density;
+  BoutReal freeze_density_value;
   bool use_finite_difference;
   Field3D initial_Tn;
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity

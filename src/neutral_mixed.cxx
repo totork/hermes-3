@@ -234,6 +234,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   freeze_low_density = options["freeze_low_density"]
     .doc("Freeze evolution in low density regions?")
     .withDefault<bool>(false);
+
+  freeze_density_value = options["freeze_density_value"]
+    .withDefault<BoutReal>(1e14) / Nnorm;
   
   if (precondition) {
     inv = Laplacian::create(&options["precon_laplace"]);
