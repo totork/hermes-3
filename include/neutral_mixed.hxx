@@ -64,6 +64,7 @@ private:
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool exponential_source;
   BoutReal flux_limit; ///< Diffusive flux limit
+  bool sharper_limiter;
   bool LP_limit;
   BoutReal LP_speed;
   Field3D lambdaLP;

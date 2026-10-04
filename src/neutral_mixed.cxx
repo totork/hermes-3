@@ -212,6 +212,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
           .withDefault(-1.0);
 
+  sharper_limiter = options["sharper_limiter"].withDefault<bool>(false);
+  
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
                         .withDefault(-1.0)
@@ -523,7 +525,16 @@ void NeutralMixed::finally(const Options& state) {
       // Field3D Dmax = flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
       BoutReal eps = SQ(1. / neutral_lmax);
       Field3D Dmax = flux_limit * sqrt((Tnlim + sound_speed_Tfloor) / AA) / ( sqrt( SQ(Grad_x(logPnlim)) + SQ(Grad_z(logPnlim)) + eps));
-      BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
+
+      if (sharper_limiter) {
+	BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+	  BoutReal Dval = SQ(SQ(Dnn[i] / Dmax[i]));
+	  Dnn[i] = Dnn[i] / (sqrt(sqrt(1.0 + Dval)));
+	}
+      } else {
+	BOUT_FOR(i, Dmax.getRegion("RGN_NOBNDRY")) { Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]); }
+      }
+      
     } else if (limit_length > 0.0) {
       Field3D denom = 1.0 + (Dnn / (sqrt(Tnlim / AA) * limit_length));
       Dnn = Dnn / denom;
@@ -531,8 +542,15 @@ void NeutralMixed::finally(const Options& state) {
 
     if (diffusion_limit > 0.0) {
       // Impose an upper limit on the diffusion coefficient
-      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-	Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+      if (sharper_limiter) {
+	BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+          BoutReal Dval	= SQ(SQ(Dnn[i] / diffusion_limit));
+          Dnn[i] = Dnn[i] / (sqrt(sqrt(1.0 + Dval)));
+        }
+      } else {
+	BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+	  Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+	}
       }
     }
     Dnn_cached = 1.0 * Dnn;
@@ -1213,6 +1231,32 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
     mesh->communicate(dT);
     Field3D dummy = 0.0;
     ddt(Pn) = inv->solve(dT, dT);
+  } else if (precon_mode == 2) {
+
+    
+    Field3D DTdtN = Dnn * Tn * ddt(Nn);
+    DTdtN.applyBoundary("dirichlet");
+    mesh->communicate(DTdtN);
+
+    ddt(Pn) -= (gamma * 5. / 3) * Div_a_Grad_perp_neutrals(DTdtN, logPnlim, dagp, upwinding, diffusion_mode);
+
+    inv->setCoefA(1 - gamma * Div_a_Grad_perp_neutrals(Dnn, logPnlim, dagp, upwinding, diffusion_mode));
+
+    inv->setCoefC1(-1. / ((gamma * 5. / 3) * Dnn));
+    inv->setCoefC2(logPnlim);
+    inv->setCoefD((-gamma * 5. / 3) * Dnn);
+
+    ddt(Pn) = inv->solve(ddt(Pn));
+
+    ddt(Pn).applyBoundary("dirichlet");
+    mesh->communicate(ddt(Pn));
+
+    ddt(Nn) -= gamma * Div_a_Grad_perp_neutrals(DnnNn / Pnlim, ddt(Pn), dagp, upwinding, diffusion_mode);
+
+
+    if (evolve_momentum) {
+      ddt(NVn) -= gamma * Div_a_Grad_perp_neutrals(DnnNVn / Pnlim, ddt(Pn), dagp, upwinding, diffusion_mode);
+    }
     
   } else {
     throw BoutException("Wrong preconditioner mode chosen in neutral_mixed");
