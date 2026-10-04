@@ -1246,7 +1246,9 @@ void NeutralMixed::precon(const Options& state, BoutReal gamma) {
     inv->setCoefC2(logPnlim);
     inv->setCoefD((-gamma * 5. / 3) * Dnn);
 
-    ddt(Pn) = inv->solve(ddt(Pn));
+    Field3D dT = ddt(Pn);
+    dT.applyBoundary("dirichlet");
+    ddt(Pn) = inv->solve(ddt(Pn), dT);
 
     ddt(Pn).applyBoundary("dirichlet");
     mesh->communicate(ddt(Pn));
