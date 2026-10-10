@@ -1874,8 +1874,12 @@ inline BoutReal dagp_fv::xflux(const Field3D& a, const Field3D& f, const Ind3D& 
   const auto dx = f[ixp] - f[i];
   BoutReal av;
   if constexpr (upwinding) {
-
-    av = 2.0 * (a[i] * a[ixp]) / (a[i] + a[ixp]);
+    BoutReal denom = a[i] + a[ixp];
+    if (denom != 0.0) {
+      av = 2.0 * (a[i] * a[ixp]) / denom;
+    } else {
+      av = 0.0;
+    }
     
   } else {
     av = 0.5 * (a[i] + a[ixp]);
@@ -1891,7 +1895,13 @@ inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& 
   BoutReal av;
   if constexpr (upwinding) {
 
-    av = 2.0 * (a[i] * a[izp]) / (a[i] + a[izp]); 
+    BoutReal denom = a[i] + a[izp];
+    if (denom != 0.0) {
+      av = 2.0 * (a[i] * a[izp]) / denom;
+    } else {
+      av = 0.0;
+    }
+
     
   } else {
     av = 0.5 * (a[i] + a[izp]);
