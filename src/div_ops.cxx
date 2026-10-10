@@ -131,6 +131,20 @@ void MC(Stencil1D& n, const BoutReal h) {
   n.R = n.c + 0.5 * slope;
 }
 
+void VanAlbada(Stencil1D& n) {
+
+  const BoutReal dl = n.c - n.m;
+  const BoutReal dr = n.p - n.c;
+  const BoutReal denom = dl * dl + dr * dr;
+  const BoutReal eps = 1e-12 * denom + 1e-30;
+  const BoutReal ab = dl * dr;
+  const BoutReal ab_pos = 0.5 * (ab + sqrt(ab * ab + eps * eps));
+  const BoutReal slope = (ab_pos * (dl + dr)) / (denom + eps);
+  n.L = n.c - 0.5 * slope;
+  n.R = n.c + 0.5 * slope;
+}
+
+
 void XPPM(Stencil1D& n, const BoutReal h) {
   // 4th-order PPM interpolation in X
 
@@ -1860,7 +1874,9 @@ inline BoutReal dagp_fv::xflux(const Field3D& a, const Field3D& f, const Ind3D& 
   const auto dx = f[ixp] - f[i];
   BoutReal av;
   if constexpr (upwinding) {
-    av = dx > 0 ? a[ixp] : a[i];
+
+    av = 2.0 * (a[i] * a[ixp]) / (a[i] + a[ixp]);
+    
   } else {
     av = 0.5 * (a[i] + a[ixp]);
   };
@@ -1874,7 +1890,9 @@ inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& 
   const auto dz = f[izp] - f[i];
   BoutReal av;
   if constexpr (upwinding) {
-    av = dz > 0 ? a[izp] : a[i];
+
+    av = 2.0 * (a[i] * a[izp]) / (a[i] + a[izp]); 
+    
   } else {
     av = 0.5 * (a[i] + a[izp]);
   }

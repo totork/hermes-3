@@ -64,10 +64,13 @@ private:
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
   bool exponential_source;
   BoutReal flux_limit; ///< Diffusive flux limit
+  BoutReal prefactor_advection;
   bool sharper_limiter;
   bool LP_limit;
   BoutReal LP_speed;
   Field3D lambdaLP;
+  Field3D freeze_factor;
+  bool parallel;
   BoutReal limit_length;
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
   bool inherited_T;
@@ -108,7 +111,7 @@ private:
   Field3D mf_visc_perp_xlow, mf_visc_perp_ylow, mf_visc_par_ylow;
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
-
+  Field3D TE_Nn_diffusion, TE_Nn_advection;
   std::string equi_species;
   bool core_equilibriate;
   BoutReal tau_eq, n_thresh, delta_n, t_thresh, delta_t;
