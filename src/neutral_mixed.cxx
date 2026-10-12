@@ -189,6 +189,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   temperature_floor = options["temperature_floor"].doc("Low temperature scale for low_T_diffuse_perp")
     .withDefault<BoutReal>(0.1) / get<BoutReal>(alloptions["units"]["eV"]);
 
+  scale_ddt = options["scale_ddt"].withDefault<BoutReal>(-1.0);
+  
   include_cond = options.isSet("anomalous_conduction");
   anomalous_conduction = options["anomalous_conduction"].withDefault(Field3D{0.0}) / (meters * meters / seconds);
 
@@ -848,11 +850,10 @@ void NeutralMixed::finally(const Options& state) {
 
 
   // Scale time derivatives
-  if (state.isSet("scale_timederivs")) {
-    Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
-    ddt(Nn) *= scale_timederivs;
-    ddt(Pn) *= scale_timederivs;
-    ddt(NVn) *= scale_timederivs;
+  if (scale_ddt > 0.0) {
+    ddt(Nn) *= scale_ddt;
+    ddt(Pn) *= scale_ddt;
+    ddt(NVn) *= scale_ddt;
   }
 
 #if CHECKLEVEL >= 1

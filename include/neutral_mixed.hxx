@@ -56,6 +56,7 @@ private:
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
   bool disable_Dnn;
+  BoutReal scale_ddt;
   BoutReal temperature_floor;
   bool sheath_ydown, sheath_yup;
   bool dissipative;
