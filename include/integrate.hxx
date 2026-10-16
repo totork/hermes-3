@@ -76,10 +76,7 @@ auto cellAverage(Function func, const RegionType &region) {
 
       // Integrate in Y using Simpson's rule
       // Using limiter to calculate cell edge values
-      result[i] =
-        4. / 6 * func((args[i])...) +
-        (Ji + J[ym]) / (12. * Ji) * func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...) +
-        (Ji + J[yp]) / (12. * Ji) * func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
+      result[i] = func((args[i])...);
     }
     return result;
   };
