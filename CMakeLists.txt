@@ -70,6 +70,7 @@ set(HERMES_SOURCES
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
     src/isothermal.cxx
+    src/inherit_temperature.cxx
     src/adhoc_potential.cxx
     src/quasineutral.cxx
     src/diamagnetic_drift.cxx
@@ -125,6 +126,7 @@ set(HERMES_SOURCES
     include/binormal_stpm.hxx
     include/collisions.hxx
     include/component.hxx
+    include/inherit_temperature.hxx
     include/adhoc_potential.hxx
     include/kmodel.hxx
     include/component_scheduler.hxx
