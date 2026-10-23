@@ -38,7 +38,7 @@ private:
   Field3D NV_err;       ///< Difference from momentum as input from solver
   Field3D NV_solver;    ///< Momentum as calculated in the solver
   Field3D V;            ///< Species parallel velocity
-
+  BoutReal scale_ddt;
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
   bool disable_ddt;
   bool bndry_flux;      // Allow flows through boundaries?

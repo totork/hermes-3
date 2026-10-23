@@ -83,6 +83,8 @@ private:
   bool poloidal_flows;
   bool thermal_conduction;    ///< Include thermal conduction?
   BoutReal kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux calculation
+  BoutReal scale_ddt;
+
   BoutReal kappa_limit_alpha; ///< Flux limit if >0
   bool limiter_Grillix;
   BoutReal limiter_Lpar;

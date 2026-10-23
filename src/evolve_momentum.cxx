@@ -103,6 +103,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options &alloptions, Solver *so
 
   auto& nv_options = alloptions[std::string("NV") + name];
 
+  scale_ddt = nv_options["scale_ddt"].withDefault<BoutReal>(-1.0);
+  
   isMMS = nv_options["isMMS"]
     .withDefault<bool>(false);
   
@@ -306,6 +308,10 @@ void EvolveMomentum::finally(const Options &state) {
   //       because NV may be modified by electromagnetic terms
   ddt(NV) += NV_err;
 
+  if (scale_ddt > 0.0) {
+    ddt(NV) *= scale_ddt;
+  }
+  
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(NV) *= get<Field3D>(state["scale_timederivs"]);

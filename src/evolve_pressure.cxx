@@ -132,6 +132,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci;   // [Pa/s] or [W/m^3] if converted to energy
   time_normalisation = 1./Omega_ci;   // [s]
 
+  scale_ddt = p_options["scale_ddt"].withDefault<BoutReal>(-1.0);
+
+  
   adapt_source = p_options["adapt_source"].doc("Adaptive source to pin temperature to value, given as electronvolt")
     .withDefault<BoutReal>(-1.0) / (Tnorm);
   
@@ -597,6 +600,10 @@ void EvolvePressure::finally(const Options& state) {
   // This is active when P < 0 or when N < density_floor
   ddt(P) += N * T - P;
 
+  if (scale_ddt > 0.0) {
+    ddt(P) *= scale_ddt;
+  }
+  
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(P) *= get<Field3D>(state["scale_timederivs"]);
