@@ -3,6 +3,7 @@
 
 #include <bout/mesh.hxx>
 
+
 namespace {
 BoutReal floor(BoutReal value, BoutReal min) {
   if (value < min)
@@ -59,6 +60,11 @@ void SoundSpeed::transform(Options &state) {
       fastest_wave[i] = BOUTMAX(fastest_wave[i], alfven_speed);
     }
   }
+
+
+  mesh->communicate(sound_speed, fastest_wave);
+  sound_speed.applyParallelBoundary("parallel_neumann_o1");
+  fastest_wave.applyParallelBoundary("parallel_neumann_o1");   
 
   set(state["sound_speed"], sound_speed);
   set(state["fastest_wave"], fastest_wave*fastest_wave_factor);

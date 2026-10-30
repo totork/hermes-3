@@ -207,23 +207,30 @@ const Field3D Div_par_fvv(const Field3D& f_in, const Field3D& v_in,
       const auto iyp = i.yp();
       const auto iym = i.ym();
 
-      //Maximum local wave speed
+
       const BoutReal amax = BOUTMAX(wave_speed_in[i],
-                                          fabs(v_in[i]),
-                                  fabs(v_up[iyp]),
-                                  fabs(v_down[iym]));
+                                    fabs(v_in[i]),
+                                    fabs(v_up[iyp]),
+                                    fabs(v_down[iym]));
+      
+      const BoutReal amax_up = 0.5 * (wave_speed_in[i] + wave_speed_in.yup()[iyp]);
+      const BoutReal amax_down = 0.5 * (wave_speed_in[i] + wave_speed_in.ydown()[iym]);
+
+      
       if (mode==0) {
 	result[i] = B[i] * (
 			    (f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
 			    - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
 			    // Penalty terms. This implementation is very dissipative.
 			    // Note: This version adds a viscosity that damps gradients of velocity
-			    + amax * (f_in[i] + f_up[iyp]) * (v_in[i] - v_up[iyp]) / (B[i] + B_up[iyp])
-			    + amax * (f_in[i] + f_down[iym]) * (v_in[i] - v_down[iym]) / (B[i] + B_down[iym])
+			    + amax_up * (f_in[i] + f_up[iyp]) * (v_in[i] - v_up[iyp]) / (B[i] + B_up[iyp])
+			    + amax_down * (f_in[i] + f_down[iym]) * (v_in[i] - v_down[iym]) / (B[i] + B_down[iym])
 			    )
 	  / (2 * dy[i] * sqrt(g_22[i]));
       } else if (mode==1) {
 
+	
+	
 	StencilH3 sf;
 	sf.c = f_in[i];
 	sf.m = f_down[iym];
@@ -660,19 +667,19 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
       const auto iyp = i.yp();
       const auto iym = i.ym();
 
-      // Maximum local wave speed
-      const BoutReal amax = BOUTMAX(wave_speed_in[i],
-                                    fabs(v_in[i]),
-                                    fabs(v_up[iyp]),
-                                    fabs(v_down[iym]));
+
+      const BoutReal amax_up = 0.5 * (wave_speed_in[i] + wave_speed_in.yup()[iyp]);
+      const BoutReal amax_down = 0.5 * (wave_speed_in[i] + wave_speed_in.ydown()[iym]);
+
+      
       // Divergencefree B leads to A1 * B1 = A2 * B2 -> A2 = A1 * B1 / B2
       BoutReal flux_up = 0.0;
       BoutReal flux_down = 0.0;
       if (mode == 0){
 	if (dissipative) {
 	  
-	  flux_up = 0.5 * (f_in[i] * (v_in[i] + amax) + f_up[iyp] * (v_up[iyp] - amax)) * coord->cellarea_yup[i];
-	  flux_down = 0.5 * (f_in[i] * (v_in[i] - amax) + f_down[iym] * (v_down[iym] + amax)) * coord->cellarea_ydown[i];
+	  flux_up = 0.5 * (f_in[i] * (v_in[i] + amax_up) + f_up[iyp] * (v_up[iyp] - amax_up)) * coord->cellarea_yup[i];
+	  flux_down = 0.5 * (f_in[i] * (v_in[i] - amax_down) + f_down[iym] * (v_down[iym] + amax_down)) * coord->cellarea_ydown[i];
 	  
 	  if (coord->has_bndry_yup[i] == true) {
 	    flux_up = 0.25 * (f_in[i] + f_up[iyp]) * (v_in[i] + v_up[iyp]) * coord->cellarea_yup[i];
@@ -706,6 +713,8 @@ Field3D Div_par_mod(const Field3D& f_in, const Field3D& v_in,
       
       } else if (mode==1) { // Using slope limiters
 
+	// Maximum local wave speed                                                                                                                                                                                                                                                 
+	
 	StencilH3 sf;
 	sf.c = f_in[i];
 	sf.m = f_down[iym];

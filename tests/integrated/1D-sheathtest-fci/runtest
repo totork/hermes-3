@@ -32,8 +32,8 @@ def gridname(ny):
 
 
 ny = 128
-nout = 10
-timestep = 1e7 / nout
+nout = 100
+timestep = 3e6 / nout
 
 nproc = 1
 
@@ -86,16 +86,16 @@ for var in (Pe,Pi,Ni):
         print("Asymmetry!")
         success = False
 
-if abs(Ni[0] - 8.05756855) > tol:
-    print("Density mismatch")
+if abs(Ni[0] - 6.264090324750706) > tol:
+    print(f"Density mismatch {Ni[0]}")
     success = False
 
-if abs(Pi[0] - 157.21473734) > tol:
-    print("Pi mismatch")
+if abs(Pi[0] - 130.15515159094005) > tol:
+    print(f"Pi mismatch {Pi[0]}")
     success = False
 
-if abs(Pe[0] - 147.98875163) > tol:
-    print("Pe mismatch")
+if abs(Pe[0] - 124.00492033617624) > tol:
+    print(f"Pe mismatch {Pe[0]}")
     success = False
 
 

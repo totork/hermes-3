@@ -10,12 +10,18 @@
 ///
 /// This uses the sum of all species pressures and mass densities
 /// so should run after those have been set.
+using bout::globals::mesh;
 struct SoundSpeed : public Component {
   SoundSpeed(std::string name, Options &alloptions, Solver*) {
     Options &options = alloptions[name];
+
+    // Don't change the default, but turn off electron dynamics when Fci by default
+    // Fci does not actually penalise jumps in the face reconstruction, but jumps between cells
+    // This is usually more dissipative, so turn of electrons here by default
+    
     electron_dynamics = options["electron_dynamics"]
       .doc("Include electron sound speed?")
-      .withDefault<bool>(true);
+      .withDefault<bool>(false);
 
     alfven_wave = options["alfven_wave"]
       .doc("Include Alfven wave speed?")
