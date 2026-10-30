@@ -630,7 +630,7 @@ void NeutralMixed::finally(const Options& state) {
   TRACE("Neutral density");
   if (parallel) {
     if (!isMMS){
-      TE_Nn_advection = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, dissipative, false);
+      TE_Nn_advection = -FV::Div_par_mod<hermes::Limiter>(Nn, Vn, sound_speed, pf_adv_par_ylow, true, dissipative, false);
       ddt(Nn) = TE_Nn_advection;
     } else {
       ddt(Nn) = -Div_par(Nn * Vn);
@@ -672,7 +672,7 @@ void NeutralMixed::finally(const Options& state) {
     Field3D e_plus_p = Nnlim * Tn + (2. / 3) * Pn;
     if (parallel) {
       if (!isMMS) {
-	ddt(Pn) = - FV::Div_par_mod<hermes::Limiter>(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, dissipative);      // Parallel advection
+	ddt(Pn) = - FV::Div_par_mod<hermes::Limiter>(e_plus_p, Vn, sound_speed, ef_adv_par_ylow, true, dissipative, true);      // Parallel advection
       } else {
 	ddt(Pn) = - Div_par(e_plus_p * Vn);
       }

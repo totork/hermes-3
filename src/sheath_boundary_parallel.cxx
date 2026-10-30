@@ -355,8 +355,9 @@ void SheathBoundaryParallel::transform(Options &state) {
 			    power, i, tesheath, nesheath, vesheath, phi[i], phisheath, q, flux);
       }
 #endif
-
-      electron_energy_source[i] -= pnt.dir * power;
+      if (pnt.abs_offset() == 1) {
+	electron_energy_source[i] -= pnt.dir * power;
+      }
     }
   }); // end iter_regions
 
