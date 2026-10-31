@@ -25,7 +25,7 @@ void Inherittemperature::transform(Options &state) {
 
   Field3D den = getNoBoundary<Field3D>(species["density"]);
   
-  set(species["pressure"], den + donor_T);
+  set(species["pressure"], den * donor_T);
   
 }
 
