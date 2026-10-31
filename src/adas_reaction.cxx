@@ -26,6 +26,14 @@ namespace {
       return min;
     return value;
   }
+
+  BoutReal available_density(BoutReal n, BoutReal flr, BoutReal width) {
+    BoutReal k = 10.0 / width;
+    BoutReal x0 = flr + width / 2.0;
+    return 1.0 / (1.0 + exp(-k * (n - x0)));
+
+  }
+  
 }
 
 OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename, int level) {
@@ -144,7 +152,7 @@ void OpenADAS::calculate_rates(Options& electron, Options& from_ion, Options& to
   Field3D reaction_rate = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         // Note: densities can be (slightly) negative
-        return floor(ne, 0.0) * floor(n1, 0.0) *
+        return floor(ne, 0.0) * floor(n1, 0.0) * available_density(n1, 3e14/Nnorm, 3e14/Nnorm) *
           rate_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm / FreqNorm;
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
